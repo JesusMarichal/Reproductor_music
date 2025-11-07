@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:on_audio_query/on_audio_query.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/player_bar.dart';
+import '../widgets/music_loader.dart';
 import 'player_view.dart';
 
 class HomeView extends StatefulWidget {
@@ -69,8 +70,7 @@ class HomeViewState extends State<HomeView>
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<HomeController>();
-    if (controller.isLoading)
-      return const Center(child: CircularProgressIndicator());
+    if (controller.isLoading) return const Center(child: MusicLoader());
 
     if (!controller.permissionGranted) {
       return Center(
