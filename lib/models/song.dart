@@ -6,6 +6,8 @@ class Song extends BaseModel {
   final String? uri;
   final String? artist;
   final int? duration;
+  final String? album;
+  final int? albumId;
 
   Song({
     required this.id,
@@ -13,6 +15,8 @@ class Song extends BaseModel {
     this.uri,
     this.artist,
     this.duration,
+    this.album,
+    this.albumId,
   });
 
   @override

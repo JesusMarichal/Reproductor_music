@@ -16,6 +16,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => HomeController(),
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'Primek Music',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
