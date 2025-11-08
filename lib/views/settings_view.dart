@@ -43,7 +43,11 @@ class SettingsView extends StatelessWidget {
             title: Text('Notificaciones'),
             subtitle: Text('Configuración del sistema'),
           ),
-          const ListTile(leading: Icon(Icons.info), title: Text('Acerca de')),
+          const ListTile(
+            leading: Icon(Icons.info),
+            title: Text('Acerca de'),
+            subtitle: Text('Versión 0.0.1'),
+          ),
         ],
       ),
     );

@@ -5,6 +5,7 @@ class TrialService {
   static const _expiredKey = 'trial_expired_v1';
   static const _unlimitedKey = 'trial_unlimited_v1';
   static const _activatedKey = 'trial_activated_v1';
+  // Duración de la fase de prueba en producción: 2 días.
   static const Duration trialDuration = Duration(days: 2);
 
   Future<DateTime> _now() async => DateTime.now();
