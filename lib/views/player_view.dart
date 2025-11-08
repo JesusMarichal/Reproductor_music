@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import '../controllers/home_controller.dart';
 
@@ -10,7 +11,68 @@ class PlayerView extends StatefulWidget {
   State<PlayerView> createState() => _PlayerViewState();
 }
 
-class _PlayerViewState extends State<PlayerView> {
+class _PlayerViewState extends State<PlayerView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  bool _pulseRunning = false;
+  final OnAudioQuery _audioQuery = OnAudioQuery();
+  int? _artworkSongId;
+  bool _hasArtwork = false;
+  Uint8List? _artworkBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      // Periodo un poco más largo no reduce frames por segundo, pero hace el pulso más suave
+      duration: const Duration(milliseconds: 1500),
+    );
+  }
+
+  void _updatePulse(bool playing) {
+    if (playing && !_pulseRunning) {
+      _pulseCtrl.repeat(reverse: true);
+      _pulseRunning = true;
+    } else if (!playing && _pulseRunning) {
+      _pulseCtrl.stop();
+      _pulseRunning = false;
+    }
+  }
+
+  Future<void> _checkArtwork(int songId) async {
+    try {
+      final art = await _audioQuery.queryArtwork(
+        songId,
+        ArtworkType.AUDIO,
+        format: ArtworkFormat.JPEG,
+        size: 1024,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (art != null && art.isNotEmpty) {
+          _artworkBytes = art;
+          _hasArtwork = true;
+        } else {
+          _artworkBytes = null;
+          _hasArtwork = false;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _artworkBytes = null;
+        _hasArtwork = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
   String _format(Duration? d) {
     if (d == null) return '0:00';
     final minutes = d.inMinutes.remainder(60);
@@ -22,7 +84,6 @@ class _PlayerViewState extends State<PlayerView> {
   Widget build(BuildContext context) {
     final controller = context.watch<HomeController>();
     final song = controller.currentSong;
-
     if (song == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Reproductor')),
@@ -35,48 +96,111 @@ class _PlayerViewState extends State<PlayerView> {
       body: Column(
         children: [
           const SizedBox(height: 20),
-          // Artwork (ahora un poco más pequeño)
           Expanded(
-            child: Center(
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: QueryArtworkWidget(
-                    id: int.tryParse(song.id) ?? 0,
-                    type: ArtworkType.AUDIO,
-                    artworkFit: BoxFit.cover,
-                    size: 1024,
-                    nullArtworkWidget: Container(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.06),
-                      child: const Center(
-                        child: Icon(
-                          Icons.music_note,
-                          size: 96,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double maxSide = MediaQuery.of(context).size.width * 0.65;
+                final double side = maxSide.clamp(220.0, 360.0);
+                final int songId = int.tryParse(song.id) ?? 0;
+                if (_artworkSongId != songId) {
+                  // Detecta cambio de canción y comprueba si tiene carátula
+                  _artworkSongId = songId;
+                  _hasArtwork = false;
+                  // Lanzamos verificación asíncrona (una sola vez por canción)
+                  _checkArtwork(songId);
+                }
+                return Center(
+                  child: StreamBuilder<bool>(
+                    stream: controller.audioService.player.playingStream,
+                    initialData: controller.audioService.player.playing,
+                    builder: (context, snapPlaying) {
+                      final playing = snapPlaying.data ?? false;
+                      _updatePulse(playing);
+                      return AnimatedBuilder(
+                        animation: _pulseCtrl,
+                        builder: (context, _) {
+                          // Si hay carátula real, desactivar pulso rojo para evitar parpadeo
+                          final bool shouldPulse = playing && !_hasArtwork;
+                          final t = shouldPulse
+                              ? _pulseCtrl.value
+                              : 0.0; // 0..1
+                          final primary = Theme.of(context).colorScheme.primary;
+                          // Reducimos intensidad para menor distracción y menor costo
+                          final glowOpacity = 0.08 + 0.10 * t; // 0.08..0.18
+                          final blur =
+                              26.0; // fijo para evitar reprocesado costoso del blur en cada frame
+                          final spread = 0.8; // fijo
+
+                          // Separar el artwork (estático) y la capa de brillo (animada)
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            clipBehavior: Clip.antiAlias,
+                            child: SizedBox(
+                              width: side,
+                              height: side,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  // Artwork: usamos bytes cacheados para evitar reconsultas/reloads
+                                  RepaintBoundary(
+                                    child: _artworkBytes != null
+                                        ? Image.memory(
+                                            _artworkBytes!,
+                                            key: ValueKey('artwork-${song.id}'),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Ink.image(
+                                            image: const AssetImage(
+                                              'assets/logo_music_app.png',
+                                            ),
+                                            fit: BoxFit.cover,
+                                          ),
+                                  ),
+
+                                  // Capa superior: solo esta parte se redibuja en el pulso
+                                  IgnorePointer(
+                                    child: AnimatedBuilder(
+                                      animation: _pulseCtrl,
+                                      builder: (context, _) {
+                                        final glow = shouldPulse
+                                            ? primary.withOpacity(glowOpacity)
+                                            : Colors.transparent;
+                                        return Container(
+                                          decoration: BoxDecoration(
+                                            // Necesitamos boxShadow; el Container es transparente
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.22,
+                                                ),
+                                                blurRadius: 16,
+                                                offset: const Offset(0, 8),
+                                              ),
+                                              if (shouldPulse)
+                                                BoxShadow(
+                                                  color: glow,
+                                                  blurRadius: blur,
+                                                  spreadRadius: spread,
+                                                  offset: const Offset(0, 0),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
-
-          // Info y progreso
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),

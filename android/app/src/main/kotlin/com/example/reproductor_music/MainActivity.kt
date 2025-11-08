@@ -1,5 +1,7 @@
 package com.example.reproductor_music
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// Extiende AudioServiceActivity para que audio_service comparta correctamente
+// el FlutterEngine entre la Activity y el servicio en segundo plano.
+class MainActivity : AudioServiceActivity()

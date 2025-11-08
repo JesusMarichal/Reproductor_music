@@ -54,9 +54,8 @@ class HomeController extends BaseController {
 
     // If we got songs, prepare the audio queue so playback is immediate and
     // seamless (avoids blocking later when starting playback).
-    final uris = songs.where((s) => s.uri != null).map((s) => s.uri!).toList();
-    if (uris.isNotEmpty) {
-      await audioService.setQueue(uris);
+    if (songs.isNotEmpty) {
+      await audioService.setQueueFromSongs(songs);
     }
 
     isLoading = false;
