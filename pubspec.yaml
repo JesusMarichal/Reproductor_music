@@ -37,10 +37,12 @@ dependencies:
   flutter_vlc_player: ^7.4.4
   just_audio: ^0.10.5
   audio_service: ^0.18.10
+  audio_session: ^0.1.18
   on_audio_query:
     path: third_party/on_audio_query
   provider: ^6.0.5
   permission_handler: ^11.3.1
+  shared_preferences: ^2.1.1
 
 dev_dependencies:
   flutter_test:

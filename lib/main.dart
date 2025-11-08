@@ -5,10 +5,14 @@ import 'package:provider/provider.dart';
 import 'controllers/theme_controller.dart';
 import 'controllers/home_controller.dart';
 import 'views/home_view.dart';
+import 'controllers/playlist_controller.dart';
 import 'views/favorites_view.dart';
 import 'views/playlists_view.dart';
 import 'views/settings_view.dart';
 import 'views/splash_view.dart';
+import 'controllers/trial_controller.dart';
+import 'views/trial_expired_view.dart';
+import 'views/activation_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,13 +41,35 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeController>().theme;
-    return ChangeNotifierProvider(
-      create: (_) => HomeController(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider(
+          create: (ctx) =>
+              PlaylistController(homeController: ctx.read<HomeController>()),
+        ),
+        ChangeNotifierProvider(create: (_) => TrialController()..init()),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Primek Music',
         theme: theme,
-        home: const SplashView(),
+        home: Consumer<TrialController>(
+          builder: (context, trial, _) {
+            if (trial.loading) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (!trial.activated) {
+              return const ActivationView();
+            }
+            if (trial.expired) {
+              return const TrialExpiredView();
+            }
+            return const SplashView();
+          },
+        ),
       ),
     );
   }
@@ -81,7 +107,25 @@ class _ReproductorHomeState extends State<ReproductorHome> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Primek Music'),
+        title: Consumer<TrialController>(
+          builder: (context, trial, _) {
+            final limitedActive =
+                trial.activated &&
+                !trial.unlimited &&
+                !trial.expired &&
+                trial.remaining != null;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Primek Music'),
+                if (limitedActive) ...[
+                  const SizedBox(width: 8),
+                  _trialBadge(remaining: trial.remaining!),
+                ],
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -106,6 +150,41 @@ class _ReproductorHomeState extends State<ReproductorHome> {
           BottomNavigationBarItem(
             icon: Icon(Icons.playlist_play),
             label: 'Listas',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trialBadge({required Duration remaining}) {
+    String fmt(Duration d) {
+      final days = d.inDays;
+      final hours = d.inHours % 24;
+      if (days > 0) {
+        return '${days}d ${hours}h';
+      }
+      final h = d.inHours;
+      final m = d.inMinutes % 60;
+      return '${h}h ${m}m';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade600,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.timer, size: 16, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            fmt(remaining),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),

@@ -51,7 +51,8 @@ class HomeViewState extends State<HomeView>
     _pulse = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
     );
-    _animController.repeat(reverse: true);
+    // La animación se controlará dinámicamente según el estado de reproducción
+    // (se inicia/paraliza en el StreamBuilder de cada item).
   }
 
   void _onScroll() {
@@ -65,6 +66,55 @@ class HomeViewState extends State<HomeView>
     _scrollController.dispose();
     _scrollOffset.dispose();
     super.dispose();
+  }
+
+  // Pequeño indicador visual junto a la duración que pulsa cuando la pista
+  // está en reproducción. Reutiliza la animación `_pulse` ya definida.
+  Widget _buildPlaybackIndicator(bool playing) {
+    return SizedBox(
+      width: 28,
+      height: 14,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) {
+          final v = playing ? _pulse.value : 0.0;
+          final h1 = 4.0 + 6.0 * v; // 4..10
+          final h2 = 6.0 + 6.0 * (1.0 - v); // 6..12
+          final h3 = 5.0 + 6.0 * (0.5 + 0.5 * v); // 5..11
+          final color = Theme.of(context).colorScheme.primary;
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                width: 4,
+                height: h1,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Container(
+                width: 4,
+                height: h2,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Container(
+                width: 4,
+                height: h3,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.78),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -220,12 +270,59 @@ class HomeViewState extends State<HomeView>
                             const SizedBox(width: 8),
                             Padding(
                               padding: const EdgeInsets.only(right: 8.0),
-                              child: Text(
-                                formatDuration(song.duration),
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontSize: 12,
-                                ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    formatDuration(song.duration),
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Indicador solo visible para la pista actual; para evitar
+                                  // reflujo, mostramos un SizedBox en caso contrario.
+                                  if (index == controller.currentIndex)
+                                    StreamBuilder<bool>(
+                                      stream: controller
+                                          .audioService
+                                          .player
+                                          .playingStream,
+                                      initialData: controller
+                                          .audioService
+                                          .player
+                                          .playing,
+                                      builder: (context, snap) {
+                                        final playing = snap.data ?? false;
+                                        // Controlamos el inicio/parada de la animación
+                                        // fuera del flujo de render para evitar efectos
+                                        // secundarios durante el build.
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (!mounted) return;
+                                              if (playing) {
+                                                if (!_animController
+                                                    .isAnimating) {
+                                                  _animController.repeat(
+                                                    reverse: true,
+                                                  );
+                                                }
+                                              } else {
+                                                if (_animController
+                                                    .isAnimating) {
+                                                  _animController.stop();
+                                                }
+                                              }
+                                            });
+
+                                        return playing
+                                            ? _buildPlaybackIndicator(playing)
+                                            : const SizedBox(width: 28);
+                                      },
+                                    )
+                                  else
+                                    const SizedBox(width: 28),
+                                ],
                               ),
                             ),
                           ],

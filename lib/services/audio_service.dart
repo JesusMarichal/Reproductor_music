@@ -5,6 +5,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart' as a;
+import 'package:audio_session/audio_session.dart';
 import '../models/song.dart';
 
 /// Handler que integra JustAudio con audio_service para exponer estado a
@@ -12,13 +13,56 @@ import '../models/song.dart';
 class _MyAudioHandler extends a.BaseAudioHandler
     with a.QueueHandler, a.SeekHandler {
   final AudioPlayer _player = AudioPlayer();
+  String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
 
   _MyAudioHandler() {
     _notifyPlaybackEvents();
     _listenForDurationChanges();
     _listenForCurrentSongChanges();
+    _initSession();
     // Transiciones: si tu versión de just_audio soporta crossfade, usa:
     // _player.setClip(...); (No disponible aquí) Mantendremos configuración simple.
+  }
+
+  Future<void> _initSession() async {
+    try {
+      final session = await AudioSession.instance;
+      // Configuración afinada para reproducción de música (convenience preset).
+      await session.configure(const AudioSessionConfiguration.music());
+
+      // Asegurar atributos directos para Android (latencia estable / routing adecuado).
+      await _player.setAndroidAudioAttributes(
+        const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.music,
+          usage: AndroidAudioUsage.media,
+        ),
+      );
+
+      // Pausar cuando se desconectan auriculares / salida cambia.
+      session.becomingNoisyEventStream.listen((_) {
+        if (_player.playing) {
+          pause();
+        }
+      });
+
+      // Manejo básico de interrupciones (llamadas, alarmas, etc.).
+      session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          if (event.type == AudioInterruptionType.pause ||
+              event.type == AudioInterruptionType.duck) {
+            if (_player.playing) {
+              pause();
+            }
+          }
+        } else {
+          // Reanudar sólo si se desea (aquí lo dejamos manual para evitar sorpresas).
+          // Podríamos auto-reanudar si event.type == AudioInterruptionType.pause
+          // y event.shouldResume es true.
+        }
+      });
+    } catch (e) {
+      debugPrint('AudioSession init error: $e');
+    }
   }
 
   // Mapea eventos del reproductor a PlaybackState para que audio_service
@@ -144,6 +188,12 @@ class _MyAudioHandler extends a.BaseAudioHandler
   /// Construye la cola con metadatos ricos desde Song para notificación.
   Future<void> setQueueFromSongs(List<Song> songs) async {
     final playable = songs.where((s) => s.uri != null).toList();
+    final signature = playable.map((s) => s.uri!).join('|');
+    // Evitar reconstruir la cola si es idéntica (reduce cortes / buffering al volver a vistas).
+    if (_lastQueueSignature == signature &&
+        queue.value.length == playable.length) {
+      return;
+    }
     final items = <a.MediaItem>[
       for (final s in playable)
         a.MediaItem(
@@ -169,6 +219,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
       children: children,
     );
     await _player.setAudioSource(playlist);
+    _lastQueueSignature = signature;
   }
 
   Future<void> playIndex(int index) async {
@@ -252,7 +303,12 @@ class AudioServiceInit {
       config: const a.AudioServiceConfig(
         androidNotificationChannelId: 'com.primek.music.playback',
         androidNotificationChannelName: 'Reproducción de música',
-        androidNotificationOngoing: true,
+        // Permitir que la notificación sea cerrable desde la UI del sistema.
+        // Antes estaba en `true` (notificación "ongoing"), lo que impedía
+        // que el usuario la descartara manualmente. Al ponerlo en `false`,
+        // la notificación se podrá cerrar y la acción Stop descargará
+        // correctamente el servicio cuando se invoque.
+        androidNotificationOngoing: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
       ),
     );

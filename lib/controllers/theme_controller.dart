@@ -53,7 +53,11 @@ class ThemeController extends ChangeNotifier {
     ),
   };
 
-  List<String> get availableKeys => _themes.keys.toList(growable: false);
+  // Sólo exponer por ahora los dos temas solicitados: 'red_black' y 'dark'.
+  List<String> get availableKeys {
+    final allowed = ['red_black', 'dark'];
+    return allowed.where((k) => _themes.containsKey(k)).toList(growable: false);
+  }
 
   ThemeData get theme => _themes[_currentKey] ?? _themes['default']!;
 

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:typed_data';
 import 'package:provider/provider.dart';
+import 'package:just_audio/just_audio.dart';
 import '../controllers/home_controller.dart';
+import '../controllers/playlist_controller.dart';
 
 class PlayerView extends StatefulWidget {
   const PlayerView({Key? key}) : super(key: key);
@@ -92,7 +94,53 @@ class _PlayerViewState extends State<PlayerView>
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Reproductor')),
+      appBar: AppBar(
+        title: const Text('Reproductor'),
+        actions: [
+          // Favoritos (corazón)
+          Builder(
+            builder: (context) {
+              final controller = context.watch<HomeController>();
+              final id = controller.currentSong?.id ?? '';
+              final isFav = id.isNotEmpty && controller.isFavorite(id);
+              return IconButton(
+                tooltip: 'Favorito',
+                icon: Icon(
+                  isFav ? Icons.favorite : Icons.favorite_border,
+                  color: isFav
+                      ? Theme.of(context).colorScheme.secondary
+                      : Colors.white,
+                ),
+                onPressed: () async {
+                  if (id.isEmpty) return;
+                  await controller.toggleFavoriteById(id);
+                },
+              );
+            },
+          ),
+          // Menú de tres puntos
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              // Placeholder actions: se pueden implementar compartir, detalles, etc.
+              if (value == 'add_to_playlist') {
+                _showAddToPlaylistSheet(context);
+              } else if (value == 'share') {
+                // TODO: implementar compartir
+              } else if (value == 'details') {
+                // TODO: mostrar detalles
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'add_to_playlist',
+                child: Text('Añadir a playlist'),
+              ),
+              PopupMenuItem(value: 'share', child: Text('Compartir')),
+              PopupMenuItem(value: 'details', child: Text('Detalles')),
+            ],
+          ),
+        ],
+      ),
       body: Column(
         children: [
           const SizedBox(height: 20),
@@ -303,6 +351,7 @@ class _PlayerViewState extends State<PlayerView>
                                       },
                                     ),
                                   ),
+                                  // Mostramos el tiempo actual y el tiempo total.
                                   Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
@@ -328,10 +377,37 @@ class _PlayerViewState extends State<PlayerView>
                             ),
                             const SizedBox(height: 12),
 
-                            // Controls
+                            // Controls: shuffle, prev, play/pause, next, repeat
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
+                                // Shuffle
+                                StreamBuilder<bool>(
+                                  stream: controller
+                                      .audioService
+                                      .player
+                                      .shuffleModeEnabledStream,
+                                  initialData: controller
+                                      .audioService
+                                      .player
+                                      .shuffleModeEnabled,
+                                  builder: (context, snap) {
+                                    final shuffling = snap.data ?? false;
+                                    return IconButton(
+                                      iconSize: 28,
+                                      onPressed: () async =>
+                                          await controller.toggleShuffle(),
+                                      icon: Icon(
+                                        Icons.shuffle,
+                                        color: shuffling
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                            : Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
                                 IconButton(
                                   iconSize: 40,
                                   onPressed: () async =>
@@ -366,6 +442,41 @@ class _PlayerViewState extends State<PlayerView>
                                       await controller.next(),
                                   icon: const Icon(Icons.skip_next),
                                 ),
+                                // Repeat
+                                StreamBuilder<LoopMode>(
+                                  stream: controller
+                                      .audioService
+                                      .player
+                                      .loopModeStream,
+                                  initialData:
+                                      controller.audioService.player.loopMode,
+                                  builder: (context, snap) {
+                                    final mode =
+                                        snap.data ??
+                                        controller.audioService.player.loopMode;
+                                    IconData icon;
+                                    Color color = Colors.grey;
+                                    if (mode == LoopMode.one) {
+                                      icon = Icons.repeat_one;
+                                      color = Theme.of(
+                                        context,
+                                      ).colorScheme.primary;
+                                    } else if (mode == LoopMode.all) {
+                                      icon = Icons.repeat;
+                                      color = Theme.of(
+                                        context,
+                                      ).colorScheme.primary;
+                                    } else {
+                                      icon = Icons.repeat;
+                                    }
+                                    return IconButton(
+                                      iconSize: 28,
+                                      onPressed: () async =>
+                                          await controller.cycleRepeatMode(),
+                                      icon: Icon(icon, color: color),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           ],
@@ -383,4 +494,53 @@ class _PlayerViewState extends State<PlayerView>
       ),
     );
   }
+}
+
+void _showAddToPlaylistSheet(BuildContext context) {
+  final pc = context.read<PlaylistController>();
+  final playlists = pc.playlists;
+  showModalBottomSheet(
+    context: context,
+    builder: (ctx) {
+      if (playlists.isEmpty) {
+        return SizedBox(
+          height: 200,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('No hay playlists'),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    // Abrir PlaylistsView tab para crear
+                    // (el usuario puede ir a la pestaña Listas y crear una)
+                  },
+                  child: const Text('Crear playlist'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return ListView.builder(
+        itemCount: playlists.length,
+        itemBuilder: (context, index) {
+          final p = playlists[index];
+          return ListTile(
+            leading: const Icon(Icons.queue_music),
+            title: Text(p.title),
+            subtitle: Text(
+              p.description.isEmpty ? 'Sin descripción' : p.description,
+            ),
+            onTap: () async {
+              await pc.addSongToPlaylist(p.id);
+              if (context.mounted) Navigator.of(context).pop();
+            },
+          );
+        },
+      );
+    },
+  );
 }
