@@ -149,11 +149,26 @@ class _PlayerViewState extends State<PlayerView>
                                             key: ValueKey('artwork-${song.id}'),
                                             fit: BoxFit.cover,
                                           )
-                                        : Ink.image(
-                                            image: const AssetImage(
-                                              'assets/logo_music_app.png',
+                                        : Container(
+                                            // Fondo sutil para que el logo redondee igual que las fotos
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withOpacity(0.06),
+                                            child: Center(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  20,
+                                                ),
+                                                child: Image.asset(
+                                                  'assets/logo_music_app.png',
+                                                  key: ValueKey(
+                                                    'logo-fallback-${song.id}',
+                                                  ),
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              ),
                                             ),
-                                            fit: BoxFit.cover,
                                           ),
                                   ),
 
