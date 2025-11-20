@@ -33,24 +33,36 @@ class PlaylistRepository {
         title: 'Pop',
         description: 'Tus canciones pop',
         songIds: const [],
+        type: PlaylistType.normal,
+        childPlaylistIds: const [],
+        excludedSongIds: const [],
       ),
       Playlist(
         id: 'rock',
         title: 'Rock',
         description: 'Rock y energía',
         songIds: const [],
+        type: PlaylistType.normal,
+        childPlaylistIds: const [],
+        excludedSongIds: const [],
       ),
       Playlist(
         id: 'jazz',
         title: 'Jazz',
         description: 'Suaves ritmos de jazz',
         songIds: const [],
+        type: PlaylistType.normal,
+        childPlaylistIds: const [],
+        excludedSongIds: const [],
       ),
       Playlist(
         id: 'chill',
         title: 'Chill',
         description: 'Relajación y calma',
         songIds: const [],
+        type: PlaylistType.normal,
+        childPlaylistIds: const [],
+        excludedSongIds: const [],
       ),
     ];
     final merged = [...current, ...initial];
@@ -100,6 +112,29 @@ class PlaylistRepository {
       title: title,
       description: description,
       songIds: songIds,
+      type: PlaylistType.normal,
+      childPlaylistIds: const [],
+      excludedSongIds: const [],
+    );
+    all.add(newPlaylist);
+    await savePlaylists(all);
+  }
+
+  Future<void> createMixedPlaylist(
+    String title,
+    String description,
+    List<String> childPlaylistIds,
+  ) async {
+    final all = await loadPlaylists();
+    final id = _generateId(title, all);
+    final newPlaylist = Playlist(
+      id: id,
+      title: title,
+      description: description,
+      songIds: const [],
+      type: PlaylistType.mixed,
+      childPlaylistIds: childPlaylistIds,
+      excludedSongIds: const [],
     );
     all.add(newPlaylist);
     await savePlaylists(all);
@@ -110,6 +145,9 @@ class PlaylistRepository {
     String? title,
     String? description,
     List<String>? songIds,
+    PlaylistType? type,
+    List<String>? childPlaylistIds,
+    List<String>? excludedSongIds,
   }) async {
     final all = await loadPlaylists();
     final index = all.indexWhere((p) => p.id == id);
@@ -118,6 +156,27 @@ class PlaylistRepository {
       title: title,
       description: description,
       songIds: songIds,
+      type: type,
+      childPlaylistIds: childPlaylistIds,
+      excludedSongIds: excludedSongIds,
+    );
+    all[index] = updated;
+    await savePlaylists(all);
+  }
+
+  /// Excluye una canción de una lista mixta sin afectar las playlists hijas
+  Future<void> excludeSongFromMixedPlaylist(
+    String playlistId,
+    String songId,
+  ) async {
+    final all = await loadPlaylists();
+    final index = all.indexWhere((p) => p.id == playlistId);
+    if (index == -1) return;
+    final playlist = all[index];
+    if (playlist.type != PlaylistType.mixed) return;
+    if (playlist.excludedSongIds.contains(songId)) return;
+    final updated = playlist.copyWith(
+      excludedSongIds: [...playlist.excludedSongIds, songId],
     );
     all[index] = updated;
     await savePlaylists(all);

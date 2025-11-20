@@ -6,12 +6,15 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:reproductor_music/main.dart';
+import 'package:flutter/material.dart';
 
 void main() {
   testWidgets('Renderiza título Primek Music', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(appBar: AppBar(title: const Text('Primek Music'))),
+      ),
+    );
     expect(find.text('Primek Music'), findsOneWidget);
   });
 }

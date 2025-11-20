@@ -42,10 +42,14 @@ class _PlayerBarState extends State<PlayerBar> {
           Expanded(
             child: InkWell(
               onTap: () {
-                // Abrir player sin reiniciar la pista
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const PlayerView()));
+                final home = context.read<HomeController>();
+                // Usar la bandera estática del PlayerView como guardia más fiable
+                if (PlayerView.isOpen || home.playerViewOpen)
+                  return; // ya abierto
+                home.playerViewOpen = true;
+                Navigator.of(context).push(buildPlayerRoute()).then((_) {
+                  home.playerViewOpen = false;
+                });
               },
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

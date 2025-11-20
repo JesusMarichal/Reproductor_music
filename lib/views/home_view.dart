@@ -166,6 +166,7 @@ class HomeViewState extends State<HomeView>
               final intSongId = int.tryParse(song.id) ?? 0;
 
               final card = Padding(
+                // Un poco más de espacio vertical para distinguir cartas
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12.0,
                   vertical: 6.0,
@@ -179,34 +180,36 @@ class HomeViewState extends State<HomeView>
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
                       onTap: () async {
+                        // Pausar video si estuviera reproduciendo
+                        try {
+                          final vc = VideoControllerAccess.instanceOrNull();
+                          if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
+                        } catch (_) {}
                         final navigator = Navigator.of(context);
                         final isSame = index == controller.currentIndex;
                         final isPlaying =
                             controller.audioService.player.playing;
-                        if (isSame && isPlaying) {
-                          if (!mounted) return;
-                          navigator.push(
-                            MaterialPageRoute(
-                              builder: (_) => const PlayerView(),
-                            ),
-                          );
+                        // Si ya está abierta, sólo ajustar reproducción
+                        if (PlayerView.isOpen || controller.playerViewOpen) {
+                          if (!isSame) {
+                            await controller.playAt(index);
+                          } else if (!isPlaying) {
+                            await controller.togglePlayPause();
+                          }
                           return;
                         }
-                        if (isSame && !isPlaying) {
-                          await controller.togglePlayPause();
-                          if (!mounted) return;
-                          navigator.push(
-                            MaterialPageRoute(
-                              builder: (_) => const PlayerView(),
-                            ),
-                          );
-                          return;
+                        if (isSame) {
+                          if (!isPlaying) await controller.togglePlayPause();
+                        } else {
+                          await controller.playAt(index);
                         }
-                        await controller.playAt(index);
                         if (!mounted) return;
-                        navigator.push(
-                          MaterialPageRoute(builder: (_) => const PlayerView()),
-                        );
+                        controller.playerViewOpen =
+                            true; // marcar antes de push
+                        navigator.push(buildPlayerRoute()).then((_) {
+                          // Al cerrar la vista restablecer flag
+                          controller.playerViewOpen = false;
+                        });
                       },
                       child: SizedBox(
                         height: 68,
