@@ -10,6 +10,7 @@ import 'views/spotify_discovery_view.dart';
 import 'controllers/playlist_controller.dart';
 import 'views/favorites_view.dart';
 import 'views/playlists_view.dart';
+import 'views/videos_view.dart';
 // settings moved into drawer menu
 import 'views/splash_view.dart';
 import 'controllers/trial_controller.dart';
@@ -167,7 +168,7 @@ class _ReproductorHomeState extends State<ReproductorHome>
       const HomeView(),
       const FavoritesView(),
       const PlaylistsView(),
-      // VideosView removed temporarily
+      const VideosView(),
     ];
 
     final drawerWidth = MediaQuery.of(context).size.width * 0.78;
@@ -247,6 +248,10 @@ class _ReproductorHomeState extends State<ReproductorHome>
               BottomNavigationBarItem(
                 icon: Icon(Icons.playlist_play),
                 label: 'Listas',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.video_library),
+                label: 'Videos',
               ),
             ],
           ),
