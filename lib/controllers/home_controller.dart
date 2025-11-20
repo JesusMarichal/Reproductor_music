@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_service/audio_service.dart' as a;
 
 import '../models/song.dart';
 import 'base_controller.dart';
@@ -15,11 +14,6 @@ class HomeController extends BaseController {
   int currentIndex = -1;
   bool isLoading = false;
   bool permissionGranted = true;
-  // Identificador de playlist mixta actualmente en reproducción (si aplica)
-  String? currentMixedPlaylistId;
-  String? currentMixedPlaylistTitle;
-  // Flag para evitar abrir múltiples instancias de PlayerView
-  bool playerViewOpen = false;
 
   /// Carga inicial de canciones. Notifica a los listeners para que la UI
   /// pueda actualizarse sin reconstruir widgets enteros innecesariamente.
@@ -27,7 +21,7 @@ class HomeController extends BaseController {
   final FavoritesRepository _favRepo = FavoritesRepository();
   Set<String> favorites = {};
   final AudioService audioService = AudioService();
-  StreamSubscription<SequenceState?>? _currentIndexSub;
+  StreamSubscription<int?>? _currentIndexSub;
   StreamSubscription? _playerStateSub;
 
   HomeController() {
@@ -44,21 +38,11 @@ class HomeController extends BaseController {
 
   void _bindPlayer() {
     final player = audioService.player;
-    // Mapear canción actual basándonos en la etiqueta MediaItem (id = uri),
-    // para que funcione aunque la cola activa sea un subconjunto (favoritos).
-    _currentIndexSub = player.sequenceStateStream.listen((seqState) {
-      try {
-        final tag = seqState.currentSource?.tag;
-        if (tag is a.MediaItem) {
-          final uri = tag.id;
-          final idx = songs.indexWhere((s) => s.uri == uri);
-          currentIndex =
-              idx; // puede ser -1 si la cola no pertenece a "songs" completa
-          currentSong = idx != -1 ? songs[idx] : null;
-          notifyListeners();
-        }
-      } catch (_) {
-        // Fallback: mantener estado actual
+    _currentIndexSub = player.currentIndexStream.listen((index) {
+      if (index != null && index >= 0 && index < songs.length) {
+        currentIndex = index;
+        currentSong = songs[index];
+        notifyListeners();
       }
     });
 
@@ -106,19 +90,14 @@ class HomeController extends BaseController {
     if (index < 0 || index >= songs.length) return;
     final song = songs[index];
     if (song.uri == null) return;
-    // Si se reproduce directamente desde la vista general, limpiar indicador mixto
-    currentMixedPlaylistId = null;
-    currentMixedPlaylistTitle = null;
-    // Pausar video si está activo para liberar foco y evitar conflicto de audio.
+    currentIndex = index;
+    currentSong = song;
+    notifyListeners();
+    // If the queue was set, play by index for seamless navigation.
     try {
-      final vc = VideoControllerAccess.instanceOrNull();
-      if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-    } catch (_) {}
-    // Configurar cola completa de canciones y reproducir desde índice dado.
-    try {
-      await audioService.setQueueFromSongs(songs);
       await audioService.playIndex(index);
     } catch (_) {
+      // Fallback: play the uri directly
       await audioService.playUri(song.uri!);
     }
   }
@@ -174,34 +153,6 @@ class HomeController extends BaseController {
     await audioService.previous();
   }
 
-  /// Configura la cola a partir de un subconjunto de canciones (playlist normal o mixta)
-  /// y reproduce desde el índice dado. Permite marcar si la fuente es una playlist mixta.
-  Future<void> playSubset(
-    List<Song> subset,
-    int startIndex, {
-    bool mixed = false,
-    String? mixedId,
-    String? mixedTitle,
-  }) async {
-    if (subset.isEmpty || startIndex < 0 || startIndex >= subset.length) return;
-    try {
-      final vc = VideoControllerAccess.instanceOrNull();
-      if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-    } catch (_) {}
-    try {
-      await audioService.setQueueFromSongs(subset);
-      await audioService.playIndex(startIndex);
-    } catch (_) {
-      final song = subset[startIndex];
-      if (song.uri != null) {
-        await audioService.playUri(song.uri!);
-      }
-    }
-    currentMixedPlaylistId = mixed ? mixedId : null;
-    currentMixedPlaylistTitle = mixed ? mixedTitle : null;
-    notifyListeners();
-  }
-
   @override
   void dispose() {
     _currentIndexSub?.cancel();
@@ -214,17 +165,4 @@ class HomeController extends BaseController {
     //audioService.dispose();
     super.dispose();
   }
-}
-
-/// Acceso estático al VideoController sin acoplar provider directamente aquí.
-/// Permite pausar video desde controladores que no tienen BuildContext.
-class VideoControllerAccess {
-  static VideoControllerAccess? _instance;
-  final void Function()? pauseIfPlaying;
-  VideoControllerAccess({this.pauseIfPlaying});
-  static void register(VideoControllerAccess access) {
-    _instance = access;
-  }
-
-  static VideoControllerAccess? instanceOrNull() => _instance;
 }

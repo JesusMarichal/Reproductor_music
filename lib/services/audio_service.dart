@@ -2,7 +2,6 @@
 // Conservamos la interfaz anterior (métodos play/pause/etc) para minimizar cambios
 // en controladores y vistas existentes.
 
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart' as a;
@@ -21,71 +20,8 @@ class _MyAudioHandler extends a.BaseAudioHandler
     _listenForDurationChanges();
     _listenForCurrentSongChanges();
     _initSession();
-    _attachDiagnostics(); // Logs avanzados y monitor de 'stall'.
     // Transiciones: si tu versión de just_audio soporta crossfade, usa:
     // _player.setClip(...); (No disponible aquí) Mantendremos configuración simple.
-  }
-
-  // --- Diagnósticos avanzados opcionales ---
-  Timer? _stallTimer;
-  Duration _lastPosition = Duration.zero;
-  int _stallTicks = 0;
-  static const int _stallThresholdSeconds =
-      6; // Si posición no avanza por 6s -> posible bloqueo.
-
-  void _attachDiagnostics() {
-    // Solo en modo debug para evitar ruido en producción.
-    if (!kDebugMode) return;
-
-    // Log de secuencia/cola para detectar inconsistencias.
-    _player.sequenceStateStream.listen(
-      (seqState) {
-        final current = seqState.currentSource;
-        final sequenceLength = seqState.sequence.length;
-        final index = seqState.currentIndex;
-        debugPrint(
-          '[AudioDiag] sequenceState: len=$sequenceLength index=$index source=${current?.tag}',
-        );
-      },
-      onError: (e, st) {
-        debugPrint('[AudioDiag] sequenceStateStream error: $e');
-      },
-    );
-
-    // Monitor de avance de posición para detectar stalls (buffer lock / crash silencioso).
-    _stallTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      try {
-        final pos = _player.position;
-        if (_player.playing) {
-          if (pos == _lastPosition) {
-            _stallTicks++;
-          } else {
-            _stallTicks = 0;
-          }
-          if (_stallTicks >= _stallThresholdSeconds) {
-            debugPrint(
-              '[AudioDiag] Posición no avanza hace ${_stallTicks}s (pos=$pos, buffered=${_player.bufferedPosition}, processing=${_player.processingState})',
-            );
-            _stallTicks = 0; // Evitar spam continuo.
-          }
-        } else {
-          _stallTicks = 0; // Reset si no está reproduciendo.
-        }
-        _lastPosition = pos;
-      } catch (e) {
-        debugPrint('[AudioDiag] Stall monitor error: $e');
-      }
-    });
-
-    // Log de errores en position/distraction potenciales.
-    _player.playbackEventStream.listen((event) {
-      if (!kDebugMode) return; // Doble guard por si se cambia en runtime.
-      if (event.processingState == ProcessingState.buffering) {
-        debugPrint(
-          '[AudioDiag] buffering… pos=${_player.position} buffered=${_player.bufferedPosition}',
-        );
-      }
-    });
   }
 
   Future<void> _initSession() async {
@@ -132,59 +68,40 @@ class _MyAudioHandler extends a.BaseAudioHandler
   // Mapea eventos del reproductor a PlaybackState para que audio_service
   // construya una notificación con controles dinámicos.
   void _notifyPlaybackEvents() {
-    _player.playbackEventStream.listen(
-      (event) {
-        final playing = _player.playing;
-        final processingState = () {
-          switch (_player.processingState) {
-            case ProcessingState.idle:
-              return a.AudioProcessingState.idle;
-            case ProcessingState.loading:
-              return a.AudioProcessingState.loading;
-            case ProcessingState.buffering:
-              return a.AudioProcessingState.buffering;
-            case ProcessingState.ready:
-              return a.AudioProcessingState.ready;
-            case ProcessingState.completed:
-              return a.AudioProcessingState.completed;
-          }
-        }();
+    _player.playbackEventStream.listen((event) {
+      final playing = _player.playing;
+      final processingState = () {
+        switch (_player.processingState) {
+          case ProcessingState.idle:
+            return a.AudioProcessingState.idle;
+          case ProcessingState.loading:
+            return a.AudioProcessingState.loading;
+          case ProcessingState.buffering:
+            return a.AudioProcessingState.buffering;
+          case ProcessingState.ready:
+            return a.AudioProcessingState.ready;
+          case ProcessingState.completed:
+            return a.AudioProcessingState.completed;
+        }
+      }();
 
-        playbackState.add(
-          playbackState.value.copyWith(
-            controls: [
-              if (queue.value.isNotEmpty) a.MediaControl.skipToPrevious,
-              if (playing) a.MediaControl.pause else a.MediaControl.play,
-              if (queue.value.isNotEmpty) a.MediaControl.skipToNext,
-              a.MediaControl.stop,
-            ],
-            androidCompactActionIndices: const [0, 1, 2],
-            processingState: processingState,
-            playing: playing,
-            speed: _player.speed,
-            updatePosition: _player.position,
-            bufferedPosition: _player.bufferedPosition,
-          ),
-        );
-      },
-      onError: (Object e, StackTrace st) {
-        // Log detallado para diagnosticar "crasheos" o fallos intermitentes.
-        debugPrint('JustAudio playbackEventStream error: $e');
-        debugPrint('$st');
-      },
-    );
-
-    // Log ligero de estados (útil para depurar bloqueos de buffer/ready)
-    _player.playerStateStream.listen(
-      (state) {
-        debugPrint(
-          'PlayerState -> playing=${state.playing} processing=${state.processingState}',
-        );
-      },
-      onError: (Object e, StackTrace st) {
-        debugPrint('playerStateStream error: $e');
-      },
-    );
+      playbackState.add(
+        playbackState.value.copyWith(
+          controls: [
+            if (queue.value.isNotEmpty) a.MediaControl.skipToPrevious,
+            if (playing) a.MediaControl.pause else a.MediaControl.play,
+            if (queue.value.isNotEmpty) a.MediaControl.skipToNext,
+            a.MediaControl.stop,
+          ],
+          androidCompactActionIndices: const [0, 1, 2],
+          processingState: processingState,
+          playing: playing,
+          speed: _player.speed,
+          updatePosition: _player.position,
+          bufferedPosition: _player.bufferedPosition,
+        ),
+      );
+    });
   }
 
   void _listenForDurationChanges() {
@@ -243,12 +160,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
       queue.add(items);
 
       final children = [
-        for (final i in items)
-          AudioSource.uri(
-            Uri.parse(i.id),
-            tag:
-                i, // Tag MediaItem para poder identificar pista actual fuera de índice fijo.
-          ),
+        for (final i in items) AudioSource.uri(Uri.parse(i.id)),
       ];
       final playlist = ConcatenatingAudioSource(
         useLazyPreparation: true,
@@ -264,13 +176,9 @@ class _MyAudioHandler extends a.BaseAudioHandler
           playlist,
           initialIndex: currentIndex,
           initialPosition: currentPosition,
-          preload: true,
         );
-        // Prepara el primer frame para inicio instantáneo
-        await _player.load();
       } else {
-        await _player.setAudioSource(playlist, preload: true);
-        await _player.load();
+        await _player.setAudioSource(playlist);
       }
     } catch (e) {
       debugPrint('AudioHandler.setQueueFromUris error: $e');
@@ -293,14 +201,11 @@ class _MyAudioHandler extends a.BaseAudioHandler
           title: s.title,
           artist: s.artist ?? 'Desconocido',
           album: s.album,
-          // Evitamos proporcionar `artUri` aquí para que Android no muestre
-          // un "large icon" cuadrado en la notificación que puede verse
-          // visualmente extraño en algunos launchers/versión de Android.
-          // Si se desea mostrar artwork, podemos gestionar un recurso
-          // distinto o una versión circular/recortada, pero por simplicidad
-          // dejamos `artUri` en null para que la notificación use solo el
-          // icono de notificación pequeño (`ic_stat_music`).
-          artUri: null,
+          artUri: (s.albumId != null)
+              ? Uri.parse(
+                  'content://media/external/audio/albumart/${s.albumId}',
+                )
+              : null,
           duration: s.duration != null
               ? Duration(milliseconds: s.duration!)
               : null,
@@ -308,34 +213,13 @@ class _MyAudioHandler extends a.BaseAudioHandler
     ];
     queue.add(items);
 
-    final children = [
-      for (final i in items)
-        AudioSource.uri(
-          Uri.parse(i.id),
-          tag:
-              i, // Tag MediaItem para mapear favoritos incluso si la cola es subset.
-        ),
-    ];
+    final children = [for (final i in items) AudioSource.uri(Uri.parse(i.id))];
     final playlist = ConcatenatingAudioSource(
       useLazyPreparation: true,
       children: children,
     );
-    try {
-      await _player.setAudioSource(playlist, preload: true);
-      // Preparar en background para que el primer play sea inmediato.
-      await _player.load();
-      _lastQueueSignature = signature;
-    } catch (e) {
-      debugPrint(
-        'AudioHandler.setQueueFromSongs: failed to set audio source: $e',
-      );
-      // Limpia la cola para evitar estado inconsistente y propaga el error
-      // para que los controladores superiores decidan qué hacer.
-      queue.add([]);
-      _lastQueueSignature = null;
-      // Re-throw para que los callers que esperan un error lo reciban.
-      rethrow;
-    }
+    await _player.setAudioSource(playlist);
+    _lastQueueSignature = signature;
   }
 
   Future<void> playIndex(int index) async {
@@ -349,11 +233,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
 
   Future<void> playUri(String uri) async {
     try {
-      await _player.setAudioSource(
-        AudioSource.uri(Uri.parse(uri)),
-        preload: true,
-      );
-      await _player.load();
+      await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
       await _player.play();
     } catch (e) {
       debugPrint('AudioHandler.playUri error: $e');
@@ -369,7 +249,6 @@ class _MyAudioHandler extends a.BaseAudioHandler
   }
 
   Future<void> dispose() async {
-    _stallTimer?.cancel();
     await _player.dispose();
   }
 }
@@ -430,10 +309,7 @@ class AudioServiceInit {
         // la notificación se podrá cerrar y la acción Stop descargará
         // correctamente el servicio cuando se invoque.
         androidNotificationOngoing: false,
-        // Usar un icono de notificación dedicado (blanco y fondo transparente)
-        // para evitar que el launcher adaptive icon muestre un recuadro/forma
-        // alrededor del icono en la notificación.
-        androidNotificationIcon: 'drawable/ic_stat_music',
+        androidNotificationIcon: 'mipmap/ic_launcher',
       ),
     );
   }

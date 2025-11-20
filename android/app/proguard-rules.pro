@@ -21,25 +21,6 @@
 
 # Add additional -keep rules for any library that requires them (check runtime crashes / docs)
 
-# --- YouTube Player / WebView related (prevent stripping) ---
--keep class com.pierfrancescosoffritti.androidyoutubeplayer.** { *; }
--keep interface com.pierfrancescosoffritti.androidyoutubeplayer.** { *; }
-
-# Flutter YouTube player plugin (reflection via MethodChannel)
--keep class io.flutter.plugins.** { *; }
-
-# WebView JS interfaces (already kept), ensure android.webkit classes not shrunk excessively
--keep class android.webkit.** { *; }
-
-# youtube_explode_dart uses HTTP parsing; keep okhttp/gson if transitively present
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
--dontwarn okhttp3.**
-
-# If using Kotlin coroutines keep debug metadata to avoid crashes in async stack mapping
--keepclassmembers class kotlin.coroutines.** { *; }
--dontwarn kotlin.coroutines.**
-
 # Remove logging from release
 -assumenosideeffects class android.util.Log {
     public static *** d(...);

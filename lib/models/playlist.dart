@@ -1,45 +1,26 @@
-enum PlaylistType { normal, mixed }
-
 class Playlist {
   final String id;
   final String title;
   final String description;
   final List<String> songIds;
-  final PlaylistType type;
-  final List<String> childPlaylistIds;
 
-  /// Canciones excluidas solo para listas mixtas. Permite "quitar" una canción
-  /// de la vista combinada sin eliminarla de sus listas originales.
-  final List<String> excludedSongIds;
-
-  const Playlist({
+  Playlist({
     required this.id,
     required this.title,
     required this.description,
     required this.songIds,
-    this.type = PlaylistType.normal,
-    this.childPlaylistIds = const [],
-    this.excludedSongIds = const [],
   });
-
-  bool get isMixed => type == PlaylistType.mixed;
 
   Playlist copyWith({
     String? id,
     String? title,
     String? description,
     List<String>? songIds,
-    PlaylistType? type,
-    List<String>? childPlaylistIds,
-    List<String>? excludedSongIds,
   }) => Playlist(
     id: id ?? this.id,
     title: title ?? this.title,
     description: description ?? this.description,
     songIds: songIds ?? this.songIds,
-    type: type ?? this.type,
-    childPlaylistIds: childPlaylistIds ?? this.childPlaylistIds,
-    excludedSongIds: excludedSongIds ?? this.excludedSongIds,
   );
 
   Map<String, dynamic> toJson() => {
@@ -47,30 +28,14 @@ class Playlist {
     'title': title,
     'description': description,
     'songIds': songIds,
-    'type': type.name,
-    'childPlaylistIds': childPlaylistIds,
-    'excludedSongIds': excludedSongIds,
   };
 
-  static Playlist fromJson(Map<String, dynamic> json) {
-    final typeStr = (json['type'] as String?) ?? 'normal';
-    final parsedType = typeStr == 'mixed'
-        ? PlaylistType.mixed
-        : PlaylistType.normal;
-    return Playlist(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String? ?? '',
-      songIds: (json['songIds'] as List<dynamic>? ?? const [])
-          .map((e) => e as String)
-          .toList(),
-      type: parsedType,
-      childPlaylistIds: (json['childPlaylistIds'] as List<dynamic>? ?? const [])
-          .map((e) => e as String)
-          .toList(),
-      excludedSongIds: (json['excludedSongIds'] as List<dynamic>? ?? const [])
-          .map((e) => e as String)
-          .toList(),
-    );
-  }
+  static Playlist fromJson(Map<String, dynamic> json) => Playlist(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    description: json['description'] as String? ?? '',
+    songIds: (json['songIds'] as List<dynamic>? ?? const [])
+        .map((e) => e as String)
+        .toList(),
+  );
 }
