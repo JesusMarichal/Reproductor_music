@@ -7,6 +7,11 @@ import '../controllers/home_controller.dart';
 import '../controllers/playlist_controller.dart';
 
 class PlayerView extends StatefulWidget {
+  /// Bandera estática para saber si el PlayerView está actualmente visible
+  /// en la pila de rutas. Usada como guardia antes de intentar abrir otra
+  /// instancia desde widgets que no tienen acceso directo al Route.
+  static bool isOpen = false;
+
   const PlayerView({Key? key}) : super(key: key);
 
   @override
@@ -30,6 +35,11 @@ class _PlayerViewState extends State<PlayerView>
       // Periodo un poco más largo no reduce frames por segundo, pero hace el pulso más suave
       duration: const Duration(milliseconds: 1500),
     );
+    // Marcar la vista como abierta para evitar duplicados.
+    PlayerView.isOpen = true;
+    try {
+      context.read<HomeController>().playerViewOpen = true;
+    } catch (_) {}
   }
 
   void _updatePulse(bool playing) {
@@ -71,6 +81,11 @@ class _PlayerViewState extends State<PlayerView>
 
   @override
   void dispose() {
+    // Limpiar banderas de visibilidad
+    PlayerView.isOpen = false;
+    try {
+      context.read<HomeController>().playerViewOpen = false;
+    } catch (_) {}
     _pulseCtrl.dispose();
     super.dispose();
   }
@@ -88,14 +103,25 @@ class _PlayerViewState extends State<PlayerView>
     final song = controller.currentSong;
     if (song == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Reproductor')),
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Cerrar',
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
         body: const Center(child: Text('No hay canción seleccionada')),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reproductor'),
+        // Flecha hacia abajo para cerrar con la animación de la ruta
+        leading: IconButton(
+          tooltip: 'Cerrar',
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         actions: [
           // Favoritos (corazón)
           Builder(
@@ -144,6 +170,33 @@ class _PlayerViewState extends State<PlayerView>
       body: Column(
         children: [
           const SizedBox(height: 20),
+          if (controller.currentMixedPlaylistTitle != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.all_inclusive,
+                    size: 18,
+                    color: Colors.deepPurple,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Reproduciendo lista mixta: ${controller.currentMixedPlaylistTitle}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.deepPurple,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -494,6 +547,29 @@ class _PlayerViewState extends State<PlayerView>
       ),
     );
   }
+}
+
+/// Ruta con transición deslizante vertical (entra desde abajo y sale hacia abajo)
+PageRoute<void> buildPlayerRoute() {
+  return PageRouteBuilder(
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (context, animation, secondaryAnimation) => const PlayerView(),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
+      final offsetTween = Tween<Offset>(
+        begin: const Offset(0, 1),
+        end: Offset.zero,
+      );
+      return SlideTransition(
+        position: offsetTween.animate(curved),
+        child: child,
+      );
+    },
+  );
 }
 
 void _showAddToPlaylistSheet(BuildContext context) {
