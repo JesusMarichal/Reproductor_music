@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as ytx;
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'home_controller.dart';
+import '../services/audio_service.dart';
 import 'video_settings_controller.dart';
 
 class VideoItem {
@@ -66,8 +67,10 @@ class VideoController extends ChangeNotifier {
   bool isLoadingMore(String name) => _loadingMore.contains(name);
 
   VideoController() {
+    // No usar un video por defecto para evitar reproducir un "featured" no seleccionado.
+    // Inicializamos con un id vacío y solo cargamos cuando el usuario selecciona un video.
     ytController = YoutubePlayerController(
-      initialVideoId: featured.first.id,
+      initialVideoId: '',
       flags: const YoutubePlayerFlags(
         autoPlay: false,
         mute: false,
@@ -88,6 +91,13 @@ class VideoController extends ChangeNotifier {
 
   Future<void> load(String id, {String? title, bool autoPlay = true}) async {
     try {
+      // Debug: registrar id solicitada y título para ayudar a diagnosticar fallos de carga
+      try {
+        // Use debugPrint para no interferir con producción si está deshabilitado
+        debugPrint(
+          'VideoController.load -> id: $id, title: ${title ?? ''}, autoPlay: $autoPlay',
+        );
+      } catch (_) {}
       // Verificar restricciones de red antes de cargar
       try {
         final settingsAccess = _SettingsAccess.instance;
@@ -110,6 +120,13 @@ class VideoController extends ChangeNotifier {
       } catch (_) {}
       _currentId = id;
       _currentTitle = title;
+      // Si hay audio en reproducción, pausarlo para evitar mezcla de audio/video
+      try {
+        final audio = AudioService();
+        if (audio.player.playing) {
+          await audio.pause();
+        }
+      } catch (_) {}
       // Registrar acceso global la primera vez o actualizar referencia
       VideoControllerAccess.register(
         VideoControllerAccess(
@@ -121,9 +138,22 @@ class VideoController extends ChangeNotifier {
         ),
       );
       ytController.load(id);
+      try {
+        debugPrint('VideoController: ytController.load called for $id');
+      } catch (_) {}
       if (autoPlay) {
         // give a microtask so load commits
-        scheduleMicrotask(() => ytController.play());
+        scheduleMicrotask(() {
+          try {
+            debugPrint('VideoController: scheduling play for $id');
+          } catch (_) {}
+          try {
+            ytController.play();
+            debugPrint('VideoController: play() invoked for $id');
+          } catch (e) {
+            debugPrint('VideoController: play() error for $id -> $e');
+          }
+        });
       }
       notifyListeners();
     } catch (e) {
@@ -245,11 +275,12 @@ class VideoController extends ChangeNotifier {
 
   void _recreateController({required bool captionsEnabled}) {
     final wasPlaying = ytController.value.isPlaying;
-    final currentVideoId = _currentId ?? featured.first.id;
+    // No usar featured.first.id como fallback. Si no hay _currentId no recargamos.
+    final currentVideoId = _currentId;
     final old = ytController;
     // Crear nuevo controller primero
     final newController = YoutubePlayerController(
-      initialVideoId: currentVideoId,
+      initialVideoId: currentVideoId ?? '',
       flags: YoutubePlayerFlags(
         autoPlay: false,
         mute: false,
@@ -269,8 +300,8 @@ class VideoController extends ChangeNotifier {
         old.dispose();
       } catch (_) {}
     });
-    if (_currentId != null) {
-      // Re-carga y reproduce si estaba reproduciendo
+    // Si hay un id actual válido, recargarlo. No recargamos un id por defecto.
+    if (_currentId != null && _currentId!.isNotEmpty) {
       ytController.load(_currentId!);
       if (wasPlaying) {
         scheduleMicrotask(() => ytController.play());

@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/playlist_controller.dart';
+import '../controllers/video_controller.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 class PlayerView extends StatefulWidget {
-  /// Bandera estática para saber si el PlayerView está actualmente visible
-  /// en la pila de rutas. Usada como guardia antes de intentar abrir otra
-  /// instancia desde widgets que no tienen acceso directo al Route.
   static bool isOpen = false;
 
   const PlayerView({Key? key}) : super(key: key);
@@ -32,15 +31,15 @@ class _PlayerViewState extends State<PlayerView>
     super.initState();
     _pulseCtrl = AnimationController(
       vsync: this,
-      // Periodo un poco más largo no reduce frames por segundo, pero hace el pulso más suave
       duration: const Duration(milliseconds: 1500),
     );
-    // Marcar la vista como abierta para evitar duplicados.
     PlayerView.isOpen = true;
     try {
       context.read<HomeController>().playerViewOpen = true;
     } catch (_) {}
   }
+
+  // nota: comprobamos modo video directamente donde se necesita usando VideoController
 
   void _updatePulse(bool playing) {
     if (playing && !_pulseRunning) {
@@ -81,7 +80,6 @@ class _PlayerViewState extends State<PlayerView>
 
   @override
   void dispose() {
-    // Limpiar banderas de visibilidad
     PlayerView.isOpen = false;
     try {
       context.read<HomeController>().playerViewOpen = false;
@@ -100,8 +98,10 @@ class _PlayerViewState extends State<PlayerView>
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<HomeController>();
+    final videoCtrl = context.watch<VideoController>();
     final song = controller.currentSong;
-    if (song == null) {
+    final isVideo = videoCtrl.currentId != null;
+    if (song == null && !isVideo) {
       return Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -116,14 +116,12 @@ class _PlayerViewState extends State<PlayerView>
 
     return Scaffold(
       appBar: AppBar(
-        // Flecha hacia abajo para cerrar con la animación de la ruta
         leading: IconButton(
           tooltip: 'Cerrar',
           icon: const Icon(Icons.keyboard_arrow_down_rounded),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         actions: [
-          // Favoritos (corazón)
           Builder(
             builder: (context) {
               final controller = context.watch<HomeController>();
@@ -144,16 +142,10 @@ class _PlayerViewState extends State<PlayerView>
               );
             },
           ),
-          // Menú de tres puntos
           PopupMenuButton<String>(
             onSelected: (value) {
-              // Placeholder actions: se pueden implementar compartir, detalles, etc.
               if (value == 'add_to_playlist') {
                 _showAddToPlaylistSheet(context);
-              } else if (value == 'share') {
-                // TODO: implementar compartir
-              } else if (value == 'details') {
-                // TODO: mostrar detalles
               }
             },
             itemBuilder: (context) => const [
@@ -161,8 +153,6 @@ class _PlayerViewState extends State<PlayerView>
                 value: 'add_to_playlist',
                 child: Text('Añadir a playlist'),
               ),
-              PopupMenuItem(value: 'share', child: Text('Compartir')),
-              PopupMenuItem(value: 'details', child: Text('Detalles')),
             ],
           ),
         ],
@@ -202,12 +192,12 @@ class _PlayerViewState extends State<PlayerView>
               builder: (context, constraints) {
                 final double maxSide = MediaQuery.of(context).size.width * 0.65;
                 final double side = maxSide.clamp(220.0, 360.0);
-                final int songId = int.tryParse(song.id) ?? 0;
-                if (_artworkSongId != songId) {
-                  // Detecta cambio de canción y comprueba si tiene carátula
+                final int songId = song != null
+                    ? int.tryParse(song.id) ?? 0
+                    : 0;
+                if (song != null && _artworkSongId != songId) {
                   _artworkSongId = songId;
                   _hasArtwork = false;
-                  // Lanzamos verificación asíncrona (una sola vez por canción)
                   _checkArtwork(songId);
                 }
                 return Center(
@@ -220,19 +210,59 @@ class _PlayerViewState extends State<PlayerView>
                       return AnimatedBuilder(
                         animation: _pulseCtrl,
                         builder: (context, _) {
-                          // Si hay carátula real, desactivar pulso rojo para evitar parpadeo
                           final bool shouldPulse = playing && !_hasArtwork;
-                          final t = shouldPulse
-                              ? _pulseCtrl.value
-                              : 0.0; // 0..1
+                          final t = shouldPulse ? _pulseCtrl.value : 0.0;
                           final primary = Theme.of(context).colorScheme.primary;
-                          // Reducimos intensidad para menor distracción y menor costo
-                          final glowOpacity = 0.08 + 0.10 * t; // 0.08..0.18
-                          final blur =
-                              26.0; // fijo para evitar reprocesado costoso del blur en cada frame
-                          final spread = 0.8; // fijo
+                          final glowOpacity = 0.08 + 0.10 * t;
+                          final blur = 26.0;
+                          final spread = 0.8;
 
-                          // Separar el artwork (estático) y la capa de brillo (animada)
+                          if (isVideo) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              clipBehavior: Clip.antiAlias,
+                              child: SizedBox(
+                                width: side,
+                                height: side,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    YoutubePlayer(
+                                      controller: videoCtrl.ytController,
+                                      showVideoProgressIndicator: true,
+                                      progressIndicatorColor: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                    IgnorePointer(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.22,
+                                              ),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 8),
+                                            ),
+                                            if (shouldPulse)
+                                              BoxShadow(
+                                                color: primary.withOpacity(
+                                                  glowOpacity,
+                                                ),
+                                                blurRadius: blur,
+                                                spreadRadius: spread,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(28),
                             clipBehavior: Clip.antiAlias,
@@ -242,16 +272,16 @@ class _PlayerViewState extends State<PlayerView>
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  // Artwork: usamos bytes cacheados para evitar reconsultas/reloads
                                   RepaintBoundary(
                                     child: _artworkBytes != null
                                         ? Image.memory(
                                             _artworkBytes!,
-                                            key: ValueKey('artwork-${song.id}'),
+                                            key: ValueKey(
+                                              'artwork-${song?.id ?? '0'}',
+                                            ),
                                             fit: BoxFit.cover,
                                           )
                                         : Container(
-                                            // Fondo sutil para que el logo redondee igual que las fotos
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .primary
@@ -264,7 +294,7 @@ class _PlayerViewState extends State<PlayerView>
                                                 child: Image.asset(
                                                   'assets/logo_music_app.png',
                                                   key: ValueKey(
-                                                    'logo-fallback-${song.id}',
+                                                    'logo-fallback-${song?.id ?? '0'}',
                                                   ),
                                                   fit: BoxFit.contain,
                                                 ),
@@ -272,8 +302,6 @@ class _PlayerViewState extends State<PlayerView>
                                             ),
                                           ),
                                   ),
-
-                                  // Capa superior: solo esta parte se redibuja en el pulso
                                   IgnorePointer(
                                     child: AnimatedBuilder(
                                       animation: _pulseCtrl,
@@ -283,7 +311,6 @@ class _PlayerViewState extends State<PlayerView>
                                             : Colors.transparent;
                                         return Container(
                                           decoration: BoxDecoration(
-                                            // Necesitamos boxShadow; el Container es transparente
                                             boxShadow: [
                                               BoxShadow(
                                                 color: Colors.black.withOpacity(
@@ -324,7 +351,9 @@ class _PlayerViewState extends State<PlayerView>
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  song.title,
+                  isVideo
+                      ? (videoCtrl.currentTitle ?? 'Video')
+                      : (song?.title ?? ''),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -333,12 +362,12 @@ class _PlayerViewState extends State<PlayerView>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  song.artist ?? 'Desconocido',
+                  isVideo
+                      ? (videoCtrl.currentId ?? '')
+                      : (song?.artist ?? 'Desconocido'),
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
-
-                // Slider con tiempos claramente visibles
                 StreamBuilder<Duration?>(
                   stream: controller.audioService.player.durationStream,
                   builder: (context, snapDuration) {
@@ -396,15 +425,12 @@ class _PlayerViewState extends State<PlayerView>
                                     child: Slider(
                                       value: valueMs,
                                       max: maxMs,
-                                      onChanged: (v) async {
-                                        final pos = Duration(
-                                          milliseconds: v.round(),
-                                        );
-                                        await controller.audioService.seek(pos);
-                                      },
+                                      onChanged: (v) async =>
+                                          await controller.audioService.seek(
+                                            Duration(milliseconds: v.round()),
+                                          ),
                                     ),
                                   ),
-                                  // Mostramos el tiempo actual y el tiempo total.
                                   Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
@@ -429,12 +455,9 @@ class _PlayerViewState extends State<PlayerView>
                               ),
                             ),
                             const SizedBox(height: 12),
-
-                            // Controls: shuffle, prev, play/pause, next, repeat
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // Shuffle
                                 StreamBuilder<bool>(
                                   stream: controller
                                       .audioService
@@ -495,7 +518,6 @@ class _PlayerViewState extends State<PlayerView>
                                       await controller.next(),
                                   icon: const Icon(Icons.skip_next),
                                 ),
-                                // Repeat
                                 StreamBuilder<LoopMode>(
                                   stream: controller
                                       .audioService
@@ -538,7 +560,6 @@ class _PlayerViewState extends State<PlayerView>
                     );
                   },
                 ),
-
                 const SizedBox(height: 24),
               ],
             ),
@@ -549,7 +570,6 @@ class _PlayerViewState extends State<PlayerView>
   }
 }
 
-/// Ruta con transición deslizante vertical (entra desde abajo y sale hacia abajo)
 PageRoute<void> buildPlayerRoute() {
   return PageRouteBuilder(
     transitionDuration: const Duration(milliseconds: 220),
@@ -590,8 +610,6 @@ void _showAddToPlaylistSheet(BuildContext context) {
                 ElevatedButton(
                   onPressed: () async {
                     Navigator.of(ctx).pop();
-                    // Abrir PlaylistsView tab para crear
-                    // (el usuario puede ir a la pestaña Listas y crear una)
                   },
                   child: const Text('Crear playlist'),
                 ),

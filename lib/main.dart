@@ -10,7 +10,7 @@ import 'views/spotify_discovery_view.dart';
 import 'controllers/playlist_controller.dart';
 import 'views/favorites_view.dart';
 import 'views/playlists_view.dart';
-import 'views/videos_view.dart';
+// videos_view.dart: UI oculta temporalmente
 // settings moved into drawer menu
 import 'views/splash_view.dart';
 import 'controllers/trial_controller.dart';
@@ -146,7 +146,9 @@ class _ReproductorHomeState extends State<ReproductorHome>
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index;
+      // Clamp index to available pages in case it was out of range
+      final maxIndex = 2; // Home, Favorites, Playlists
+      _selectedIndex = index.clamp(0, maxIndex);
     });
   }
 
@@ -168,7 +170,6 @@ class _ReproductorHomeState extends State<ReproductorHome>
       const HomeView(),
       const FavoritesView(),
       const PlaylistsView(),
-      const VideosView(),
     ];
 
     final drawerWidth = MediaQuery.of(context).size.width * 0.78;
@@ -248,10 +249,6 @@ class _ReproductorHomeState extends State<ReproductorHome>
               BottomNavigationBarItem(
                 icon: Icon(Icons.playlist_play),
                 label: 'Listas',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.video_library),
-                label: 'Videos',
               ),
             ],
           ),

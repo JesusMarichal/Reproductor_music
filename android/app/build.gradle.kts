@@ -53,14 +53,35 @@ android {
                 signingConfig = signingConfigs.getByName("debug")
             }
 
-            // NOTE: R8/minify caused missing-class errors for Play Core in this project.
-            // For a quick release APK (testing), disable minify/shrink. Re-enable after
-            // adding appropriate keep rules or dependencies (see build outputs/missing_rules.txt).
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable code shrinking/obfuscation and resource shrinking for releases.
+            // If you get missing-class errors, add appropriate keep rules in
+            // `proguard-rules.pro` and re-run the build.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android.txt"),
                 "proguard-rules.pro"
+            )
+        }
+    }
+
+    // NOTE: ABI splits removed here to avoid conflicts with NDK/Flutter
+    // configuration. Use `flutter build apk --split-per-abi` or
+    // build an AAB (`flutter build appbundle`) which the Play Store will
+    // optimize per device automatically.
+
+    // Packaging options to reduce duplicated metadata and use modern native lib packaging.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt"
             )
         }
     }
