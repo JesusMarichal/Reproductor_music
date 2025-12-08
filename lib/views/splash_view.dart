@@ -49,29 +49,40 @@ class _SplashViewState extends State<SplashView>
       body: Center(
         child: FadeTransition(
           opacity: _fade,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.85, end: 1.0).animate(_scale),
-            child: Container(
-              width: size.width * 0.5,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ScaleTransition(
+                scale: Tween<double>(begin: 0.85, end: 1.0).animate(_scale),
+                child: Container(
+                  width: size.width * 0.5,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Ink.image(
-                  image: const AssetImage('assets/logo_music_app.png'),
-                  fit: BoxFit.cover,
+                  clipBehavior: Clip.antiAlias,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Ink.image(
+                      image: const AssetImage('assets/logo_music_app.png'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 48),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
           ),
         ),
       ),

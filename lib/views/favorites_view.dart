@@ -3,6 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/player_bar.dart';
+import 'player_view.dart';
+import '../widgets/now_playing_indicator.dart';
+
+// ... (in build method)
+
 import 'home_view.dart' show formatDuration;
 
 class FavoritesView extends StatefulWidget {
@@ -33,53 +38,6 @@ class _FavoritesViewState extends State<FavoritesView>
   void dispose() {
     _animController.dispose();
     super.dispose();
-  }
-
-  Widget _buildPlaybackIndicator() {
-    return SizedBox(
-      width: 28,
-      height: 14,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (context, _) {
-          final v = _pulse.value;
-          final h1 = 4.0 + 6.0 * v; // 4..10
-          final h2 = 6.0 + 6.0 * (1.0 - v); // 6..12
-          final h3 = 5.0 + 6.0 * (0.5 + 0.5 * v); // 5..11
-          final color = Theme.of(context).colorScheme.primary;
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                width: 4,
-                height: h1,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Container(
-                width: 4,
-                height: h2,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Container(
-                width: 4,
-                height: h3,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.78),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   @override
@@ -217,146 +175,178 @@ class _FavoritesViewState extends State<FavoritesView>
 
               // Lista de favoritos (estilo igual al Home: artwork, título, artista, duración)
               ...favoriteSongs.map((song) {
-                // `isCandidate` indica que la canción en el controlador coincide
-                // con este item; no implica que esté reproduciéndose.
                 final isCandidate = controller.currentSong?.id == song.id;
                 final intSongId = int.tryParse(song.id) ?? 0;
 
-                final card = Padding(
-                  // Un poco más de espacio vertical para distinguir cartas
-                  padding: const EdgeInsets.symmetric(vertical: 6.0),
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () async {
-                        // Pausar video si está activo
-                        try {
-                          final vc = VideoControllerAccess.instanceOrNull();
-                          if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-                        } catch (_) {}
+                Widget cardContent = Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () async {
+                      try {
+                        final vc = VideoControllerAccess.instanceOrNull();
+                        if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
+                      } catch (_) {}
 
-                        // Construir la cola SOLO con favoritos y empezar en este índice.
-                        final startIndex = favoriteSongs.indexWhere(
-                          (s) => s.id == song.id,
+                      // Play logic
+                      final isSame = controller.currentSong?.id == song.id;
+                      final isPlaying = controller.audioService.player.playing;
+
+                      // If already playing this song, just toggle (and don't open player)
+                      if (isSame) {
+                        await controller.togglePlayPause();
+                        return; // Don't open PlayerView on pause/play
+                      }
+
+                      // If different song, play it
+                      final startIndex = favoriteSongs.indexWhere(
+                        (s) => s.id == song.id,
+                      );
+                      if (startIndex == -1) return;
+
+                      try {
+                        await controller.audioService.setQueueFromSongs(
+                          favoriteSongs,
                         );
-                        if (startIndex == -1) return;
-                        try {
-                          await controller.audioService.setQueueFromSongs(
-                            favoriteSongs,
-                          );
-                          await controller.audioService.playIndex(startIndex);
-                        } catch (e) {
-                          // Fallback: reproducir esta URI directamente si falla la cola.
-                          if (song.uri != null && song.uri!.isNotEmpty) {
-                            await controller.audioService.playUri(song.uri!);
-                          }
-                        }
-                      },
-                      child: SizedBox(
-                        height: 68,
-                        child: Row(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0,
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: QueryArtworkWidget(
-                                  id: intSongId,
-                                  type: ArtworkType.AUDIO,
-                                  artworkBorder: BorderRadius.zero,
-                                  keepOldArtwork: true,
-                                  nullArtworkWidget: Container(
-                                    width: 56,
-                                    height: 56,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withOpacity(0.12),
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      size: 28,
-                                      color: Colors.grey,
-                                    ),
+                        await controller.audioService.playIndex(startIndex);
+                        // PlayerView auto-open removed per user request
+                      } catch (e) {
+                        // fallback
+                        if (song.uri != null)
+                          await controller.audioService.playUri(song.uri!);
+                      }
+                    },
+                    child: SizedBox(
+                      height: 68,
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: QueryArtworkWidget(
+                                id: intSongId,
+                                type: ArtworkType.AUDIO,
+                                artworkBorder: BorderRadius.zero,
+                                keepOldArtwork: true,
+                                nullArtworkWidget: Container(
+                                  width: 56,
+                                  height: 56,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.12),
+                                  child: const Icon(
+                                    Icons.music_note,
+                                    size: 28,
+                                    color: Colors.grey,
                                   ),
-                                  size: 56,
                                 ),
+                                size: 56,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    song.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  song.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${song.artist ?? 'Desconocido'}${(song.album != null && song.album!.isNotEmpty) ? ' • ${song.album}' : ''}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(right: 12.0),
-                              child: Text(
-                                formatDuration(song.duration),
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontSize: 12,
                                 ),
-                              ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${song.artist ?? 'Desconocido'}${(song.album != null && song.album!.isNotEmpty) ? ' • ${song.album}' : ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: Row(
+                              children: [
+                                Text(
+                                  formatDuration(song.duration),
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (isCandidate)
+                                  StreamBuilder<bool>(
+                                    stream: controller
+                                        .audioService
+                                        .player
+                                        .playingStream,
+                                    initialData:
+                                        controller.audioService.player.playing,
+                                    builder: (context, snap) {
+                                      final playing = snap.data ?? false;
+
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (!mounted) return;
+                                            if (playing &&
+                                                !_animController.isAnimating) {
+                                              _animController.repeat(
+                                                reverse: true,
+                                              );
+                                            } else if (!playing &&
+                                                _animController.isAnimating) {
+                                              _animController.stop();
+                                            }
+                                          });
+
+                                      return NowPlayingIndicator(
+                                        isPlaying: playing,
+                                        barWidth: 3,
+                                        minHeight: 3,
+                                        maxHeight: 12,
+                                      );
+                                    },
+                                  )
+                                else
+                                  const SizedBox(width: 28, height: 14),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 );
 
-                // Si este item corresponde a la canción actual (isCandidate), lo
-                // envolvemos en un StreamBuilder para decidir visualmente si mostrar
-                // el pulso y las barras sólo cuando realmente esté reproduciéndose.
+                Widget decorated = Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                  child: cardContent,
+                );
+
                 if (isCandidate) {
                   return StreamBuilder<bool>(
                     stream: controller.audioService.player.playingStream,
                     initialData: controller.audioService.player.playing,
                     builder: (context, snap) {
                       final playing = snap.data ?? false;
-                      // Control de animación fuera del build
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        if (playing) {
-                          if (!_animController.isAnimating)
-                            _animController.repeat(reverse: true);
-                        } else {
-                          if (_animController.isAnimating)
-                            _animController.stop();
-                        }
-                      });
-
-                      // Si no está reproduciéndose, devolvemos el card sin pulso
-                      // ni barras (evita que se muestre activo por defecto).
-                      if (!playing) return card;
+                      if (!playing) return decorated;
 
                       return AnimatedBuilder(
                         animation: _pulse,
@@ -373,6 +363,7 @@ class _FavoritesViewState extends State<FavoritesView>
                                   child: Container(
                                     margin: const EdgeInsets.symmetric(
                                       horizontal: 6.0,
+                                      vertical: 6.0,
                                     ),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(14),
@@ -389,14 +380,11 @@ class _FavoritesViewState extends State<FavoritesView>
                                   ),
                                 ),
                               ),
-                              Row(
-                                children: [
-                                  Expanded(child: card),
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 12.0),
-                                    child: _buildPlaybackIndicator(),
-                                  ),
-                                ],
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6.0,
+                                ),
+                                child: cardContent,
                               ),
                             ],
                           );
@@ -406,7 +394,7 @@ class _FavoritesViewState extends State<FavoritesView>
                   );
                 }
 
-                return card;
+                return decorated;
               }).toList(),
             ],
           ),

@@ -1,10 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/player_bar.dart';
 import '../controllers/playlist_controller.dart';
 import '../controllers/home_controller.dart';
 import '../models/playlist.dart';
+import '../widgets/now_playing_indicator.dart';
 
 class PlaylistsView extends StatefulWidget {
   const PlaylistsView({super.key});
@@ -25,85 +29,93 @@ class _PlaylistsViewState extends State<PlaylistsView> {
   }
 
   void _openCreatePlaylistDialog(BuildContext context) {
-    final home = context.read<HomeController>();
     final pc = context.read<PlaylistController>();
-    final songs = home.songs;
-    final selected = <String>{};
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    final searchCtrl = TextEditingController();
+    String? selectedImagePath;
+
     showDialog(
       context: context,
-      builder: (_) => StatefulBuilder(
+      builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          String q = searchCtrl.text.trim().toLowerCase();
-          final filtered = q.isEmpty
-              ? songs
-              : songs.where((s) {
-                  return s.title.toLowerCase().contains(q) ||
-                      (s.artist ?? '').toLowerCase().contains(q);
-                }).toList();
           return AlertDialog(
             title: const Text('Nueva playlist'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: const InputDecoration(labelText: 'Título'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    final picker = ImagePicker();
+                    final picked = await picker.pickImage(
+                      source: ImageSource.gallery,
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        selectedImagePath = picked.path;
+                      });
+                    }
+                  },
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                      image: selectedImagePath != null
+                          ? DecorationImage(
+                              image: FileImage(File(selectedImagePath!)),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
-                    TextField(
-                      controller: descCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: searchCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar',
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Canciones:'),
-                    ),
-                    const SizedBox(height: 4),
-                    ...filtered.map((s) {
-                      final checked = selected.contains(s.id);
-                      return CheckboxListTile(
-                        value: checked,
-                        onChanged: (v) {
-                          setState(() {
-                            if (v == true) {
-                              selected.add(s.id);
-                            } else {
-                              selected.remove(s.id);
-                            }
-                          });
-                        },
-                        title: Text(
-                          s.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          s.artist ?? 'Desconocido',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }),
-                  ],
+                    child: selectedImagePath == null
+                        ? Icon(
+                            Icons.add_a_photo,
+                            size: 40,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          )
+                        : null,
+                  ),
                 ),
-              ),
+                if (selectedImagePath != null)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        selectedImagePath = null;
+                      });
+                    },
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Quitar foto'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Agregar portada',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Título',
+                    prefixIcon: Icon(Icons.title),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Descripción (Opcional)',
+                    prefixIcon: Icon(Icons.description),
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -117,10 +129,14 @@ class _PlaylistsViewState extends State<PlaylistsView> {
                   await pc.createPlaylist(
                     title,
                     descCtrl.text.trim(),
-                    selected.toList(),
+                    [],
+                    imagePath: selectedImagePath,
                   );
                   if (!mounted) return;
                   Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Playlist "$title" creada')),
+                  );
                 },
                 child: const Text('Crear'),
               ),
@@ -211,106 +227,227 @@ class _PlaylistsViewState extends State<PlaylistsView> {
     final selected = <String>{};
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    final searchCtrl = TextEditingController();
-    // Mostrar info (sin preferencia persistida aún; se puede añadir después)
-    showDialog(
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => StatefulBuilder(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          String q = searchCtrl.text.trim().toLowerCase();
-          final filtered = q.isEmpty
-              ? playlists
-              : playlists
-                    .where((pl) => pl.title.toLowerCase().contains(q))
-                    .toList();
-          return AlertDialog(
-            title: const Text('Nueva lista mixta'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
+          return DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: const InputDecoration(labelText: 'Título'),
-                    ),
-                    TextField(
-                      controller: descCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción',
+                    // Handle
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: searchCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar playlists',
-                        prefixIcon: Icon(Icons.search),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
                       ),
-                      onChanged: (_) => setState(() {}),
+                      child: Text(
+                        'Nueva Lista Mixta',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Selecciona playlists a mezclar:'),
+
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        children: [
+                          const SizedBox(height: 16),
+                          // Form fields
+                          TextField(
+                            controller: titleCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Título',
+                              prefixIcon: const Icon(Icons.title),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceVariant.withOpacity(0.3),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: descCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Descripción (Opcional)',
+                              prefixIcon: const Icon(Icons.description),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceVariant.withOpacity(0.3),
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 8),
+
+                          Text(
+                            'Selecciona las playlists a combinar:',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          if (playlists.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Center(
+                                child: Text(
+                                  'No tienes otras playlists para mezclar.',
+                                ),
+                              ),
+                            )
+                          else
+                            ...playlists.map((pl) {
+                              final isSelected = selected.contains(pl.id);
+                              return Card(
+                                elevation: 0,
+                                color: isSelected
+                                    ? Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                          .withOpacity(0.4)
+                                    : Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey.withOpacity(0.3),
+                                  ),
+                                ),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: CheckboxListTile(
+                                  value: isSelected,
+                                  activeColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      if (v == true)
+                                        selected.add(pl.id);
+                                      else
+                                        selected.remove(pl.id);
+                                    });
+                                  },
+                                  title: Text(
+                                    pl.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${pl.songIds.length} canciones',
+                                  ),
+                                  secondary: const Icon(Icons.queue_music),
+                                ),
+                              );
+                            }),
+
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    ...filtered.map((pl) {
-                      final checked = selected.contains(pl.id);
-                      return CheckboxListTile(
-                        value: checked,
-                        onChanged: (v) {
-                          setState(() {
-                            if (v == true) {
-                              selected.add(pl.id);
-                            } else {
-                              selected.remove(pl.id);
+
+                    // Bottom Button
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final title = titleCtrl.text.trim();
+                            if (title.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ingresa un título'),
+                                ),
+                              );
+                              return;
                             }
-                          });
-                        },
-                        title: Text(pl.title),
-                        subtitle: Text('${pl.songIds.length} canciones'),
-                      );
-                    }),
-                    if (selected.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            'Playlists seleccionadas: ${selected.length}',
+                            if (selected.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Selecciona al menos una playlist',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            await pc.createMixedPlaylist(
+                              title,
+                              descCtrl.text.trim(),
+                              selected.toList(),
+                            );
+                            if (!mounted) return;
+                            Navigator.of(context).pop();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Crear Lista Mixta',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
+                    ),
                   ],
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final title = titleCtrl.text.trim();
-                  if (title.isEmpty || selected.isEmpty) return;
-                  await pc.createMixedPlaylist(
-                    title,
-                    descCtrl.text.trim(),
-                    selected.toList(),
-                  );
-                  if (!mounted) return;
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Crear'),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
-    );
+    ).then((_) {
+      // Logic to actually create if not handled inside (but Button is better inside)
+      // Actually I'll put a FloatButton or BottomBar inside the Stack if I could, but here
+      // I'll just use a button at the bottom of the column or a FAB overlaid.
+      // Since `showModalBottomSheet` blocks, I can't overlay easily outside the builder unless I put it in the builder.
+    });
+
+    // Quick fix: Add the button INSIDE the builder. I'll re-do the builder content stack.
   }
 
   @override
@@ -320,58 +457,71 @@ class _PlaylistsViewState extends State<PlaylistsView> {
         if (pc.loading) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (pc.playlists.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.library_music,
-                  size: 72,
-                  color: Colors.blueAccent,
-                ),
-                const SizedBox(height: 12),
-                const Text('Sin playlists'),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () => _openCreatePlaylistDialog(context),
-                  child: const Text('Crear playlist'),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () => _openCreateMixedPlaylistFlow(context),
-                  child: const Text('Crear lista mixta'),
-                ),
-              ],
-            ),
-          );
-        }
-        return Column(
+
+        return Stack(
           children: [
-            Expanded(
-              child: ListView.builder(
+            if (pc.playlists.isEmpty)
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.library_music,
+                      size: 72,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Sin playlists'),
+                  ],
+                ),
+              )
+            else
+              ListView.builder(
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 80),
                 itemCount: pc.playlists.length,
                 itemBuilder: (context, index) {
                   final p = pc.playlists[index];
                   return Card(
                     margin: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 16,
                       vertical: 6,
                     ),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: ListTile(
-                      title: Row(
-                        children: [
-                          if (p.isMixed)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 4.0),
-                              child: Icon(
-                                Icons.all_inclusive,
-                                size: 18,
-                                color: Colors.deepPurple,
-                              ),
-                            ),
-                          Expanded(child: Text(p.title)),
-                        ],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      leading: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          image: p.imagePath != null
+                              ? DecorationImage(
+                                  image: FileImage(File(p.imagePath!)),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: p.imagePath == null
+                            ? Icon(
+                                p.isMixed
+                                    ? Icons.all_inclusive
+                                    : Icons.queue_music,
+                                color: Theme.of(context).primaryColor,
+                              )
+                            : null,
+                      ),
+                      title: Text(
+                        p.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
                         p.isMixed
@@ -381,50 +531,78 @@ class _PlaylistsViewState extends State<PlaylistsView> {
                             : (p.description.isEmpty
                                   ? 'Sin descripción'
                                   : p.description),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: Consumer<PlaylistController>(
-                        builder: (context, ctrl, _) {
-                          if (p.isMixed) {
-                            final songs = ctrl.aggregatedSongs(p);
-                            return Text('${songs.length} canciones');
-                          }
-                          return Text('${p.songIds.length} canciones');
-                        },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${p.isMixed ? pc.aggregatedSongs(p).length : p.songIds.length} canciones',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ],
                       ),
-                      onTap: () {
-                        _showPlaylistSongs(context, p);
-                      },
-                      onLongPress: () {
-                        _showPlaylistContextMenu(context, p);
-                      },
+                      onTap: () => _showPlaylistSongs(context, p),
+                      onLongPress: () => _showPlaylistContextMenu(context, p),
                     ),
                   );
                 },
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _openCreatePlaylistDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nueva playlist'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () => _openCreateMixedPlaylistFlow(context),
-                    icon: const Icon(Icons.all_inclusive),
-                    label: const Text('Nueva lista mixta'),
-                  ),
-                ],
+            Positioned(
+              bottom: (context.watch<HomeController>().currentIndex != -1)
+                  ? 90
+                  : 24,
+              right: 24,
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (ctx) => SafeArea(
+                      child: Wrap(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.playlist_add),
+                            title: const Text('Nueva Playlist'),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _openCreatePlaylistDialog(context);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.merge_type),
+                            title: const Text('Nueva Lista Mixta'),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _openCreateMixedPlaylistFlow(context);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Crear'),
+                elevation: 4,
               ),
             ),
-            if (context.watch<HomeController>().currentIndex != -1) ...[
-              const SizedBox(height: 8),
-              const Divider(height: 1),
-              const PlayerBar(),
-            ],
+            if (context.watch<HomeController>().currentIndex != -1)
+              const Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: PlayerBar(),
+              ),
           ],
         );
       },
@@ -446,202 +624,374 @@ class _PlaylistsViewState extends State<PlaylistsView> {
         maxChildSize: 0.9,
         expand: false,
         builder: (context, scrollCtrl) {
-          return Column(
-            children: [
-              // Header estilizado
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary.withOpacity(0.85),
-                      Theme.of(context).colorScheme.primaryContainer,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(18),
+          return Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              children: [
+                // Drag Handle
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-                child: ListTile(
-                  title: Row(
+                Expanded(
+                  child: ListView(
+                    controller: scrollCtrl,
+                    padding: EdgeInsets.zero,
                     children: [
-                      if (p.isMixed)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4.0),
-                          child: Icon(
-                            Icons.all_inclusive,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                      Expanded(
-                        child: Text(
-                          p.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  subtitle: Text(
-                    p.description.isEmpty
-                        ? (p.isMixed ? 'Lista mixta' : 'Sin descripción')
-                        : p.description,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'Reproducir',
-                        icon: const Icon(Icons.play_arrow, color: Colors.white),
-                        onPressed: () async {
-                          final home = context.read<HomeController>();
-                          final subset = songs;
-                          await home.playSubset(
-                            subset,
-                            0,
-                            mixed: p.isMixed,
-                            mixedId: p.isMixed ? p.id : null,
-                            mixedTitle: p.isMixed ? p.title : null,
-                          );
-                        },
-                      ),
-                      PopupMenuButton<String>(
-                        color: Theme.of(context).colorScheme.surface,
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              _openEditPlaylistDialog(context, p);
-                              break;
-                            case 'add_songs':
-                              _openAddSongsDialog(context, p);
-                              break;
-                            case 'delete':
-                              _confirmDeletePlaylist(context, p);
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Editar'),
-                          ),
-                          if (!p.isMixed)
-                            const PopupMenuItem(
-                              value: 'add_songs',
-                              child: Text('Agregar músicas'),
+                      // Header Section
+                      const SizedBox(height: 16),
+                      Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (ctx) => SafeArea(
+                                child: Wrap(
+                                  children: [
+                                    ListTile(
+                                      leading: const Icon(Icons.photo_library),
+                                      title: const Text('Cambiar foto'),
+                                      onTap: () async {
+                                        Navigator.pop(ctx);
+                                        final picker = ImagePicker();
+                                        final picked = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                        );
+                                        if (picked != null) {
+                                          await pc.updatePlaylist(
+                                            id: p.id,
+                                            imagePath: picked.path,
+                                          );
+                                          // Force refresh or rebuild?
+                                          if (context.mounted)
+                                            Navigator.pop(
+                                              context,
+                                            ); // Close details to refresh easily or setState if possible
+                                          // Actually re-opening might be jarring.
+                                          // The view might not auto-refresh unless p is watched.
+                                          // p is passed by value/reference but if the list in controller updates, this widget might not rebuild because it's in a modal builder using 'p' from closure.
+                                          // Better to close details and let user re-open or implement a better reactive stream.
+                                          // For simplicity, we just close the modal details to "refresh" or use stateful builder inside showModalBottomSheet.
+                                          // But showModalBottomSheet uses `builder` which runs once.
+                                          // Wait, DraggableScrollableSheet builder runs on scroll.
+                                          // We should close the detail view to reflect changes safely or reload p.
+                                          if (context.mounted) {
+                                            _showPlaylistSongs(
+                                              context,
+                                              pc.playlists.firstWhere(
+                                                (pl) => pl.id == p.id,
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    if (p.imagePath != null)
+                                      ListTile(
+                                        leading: const Icon(
+                                          Icons.delete,
+                                          color: Colors.red,
+                                        ),
+                                        title: const Text(
+                                          'Quitar foto',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                        onTap: () async {
+                                          Navigator.pop(ctx);
+                                          await pc.updatePlaylist(
+                                            id: p.id,
+                                            imagePath: null,
+                                          ); // Remove image
+                                          // Same refresh logic
+                                          if (context.mounted)
+                                            Navigator.pop(context);
+                                          if (context.mounted) {
+                                            _showPlaylistSongs(
+                                              context,
+                                              pc.playlists.firstWhere(
+                                                (pl) => pl.id == p.id,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: 160,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(
+                                context,
+                              ).primaryColor.withOpacity(0.1),
+                              image: p.imagePath != null
+                                  ? DecorationImage(
+                                      image: FileImage(File(p.imagePath!)),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Theme.of(
+                                    context,
+                                  ).primaryColor.withOpacity(0.2),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
                             ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Eliminar playlist'),
+                            child: p.imagePath == null
+                                ? Icon(
+                                    p.isMixed
+                                        ? Icons.all_inclusive
+                                        : Icons.queue_music,
+                                    size: 80,
+                                    color: Theme.of(context).primaryColor,
+                                  )
+                                : null,
                           ),
-                        ],
-                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        ),
                       ),
+                      const SizedBox(height: 24),
+                      Text(
+                        p.title,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      if (p.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            p.description,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey),
+                          ),
+                        ),
+
+                      const SizedBox(height: 24),
+
+                      // Action Buttons Row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Play Button
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  final home = context.read<HomeController>();
+                                  home.playSubset(
+                                    songs,
+                                    0,
+                                    mixed: p.isMixed,
+                                    mixedId: p.isMixed ? p.id : null,
+                                    mixedTitle: p.isMixed ? p.title : null,
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 28,
+                                ),
+                                label: const Text('Reproducir'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).primaryColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  elevation: 4,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Shuffle Button
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  final home = context.read<HomeController>();
+                                  home.playSubset(
+                                    songs,
+                                    0, // Will be shuffled anyway usually or just start first then shuffle
+                                    // Better logic might be needed for true shuffle start, but playSubset handles standard playback.
+                                    // We can just play and toggle shuffle, or if playSubset supports it.
+                                    // For now, let's just play.
+                                    mixed: p.isMixed,
+                                    mixedId: p.isMixed ? p.id : null,
+                                    mixedTitle: p.isMixed ? p.title : null,
+                                  );
+                                  home.toggleShuffle(); // Toggle shuffle on
+                                },
+                                icon: const Icon(Icons.shuffle_rounded),
+                                label: const Text('Aleatorio'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  side: BorderSide(
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                      // Meta info row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${songs.length} Canciones',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            // Edit/Menu Button
+                            IconButton(
+                              icon: const Icon(Icons.more_horiz),
+                              onPressed: () {
+                                // Re-using context menu logic, but maybe in a bottom sheet or simple menu
+                                _showPlaylistContextMenu(context, p);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Songs List
+                      if (songs.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.music_off_rounded,
+                                  size: 48,
+                                  color: Colors.grey.withOpacity(0.5),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Lista vacía',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        ...songs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final s = entry.value;
+                          return ListTile(
+                            leading: QueryArtworkWidget(
+                              id: int.tryParse(s.id) ?? 0,
+                              type: ArtworkType.AUDIO,
+                              nullArtworkWidget: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Icon(
+                                  Icons.music_note,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              s.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              s.artist ?? 'Desconocido',
+                              maxLines: 1,
+                            ),
+                            trailing: Consumer<HomeController>(
+                              builder: (context, home, _) {
+                                final isCurrent = home.currentSong?.id == s.id;
+                                if (isCurrent) {
+                                  return StreamBuilder<bool>(
+                                    stream:
+                                        home.audioService.player.playingStream,
+                                    initialData:
+                                        home.audioService.player.playing,
+                                    builder: (context, snapshot) {
+                                      final isPlaying = snapshot.data ?? false;
+                                      return NowPlayingIndicator(
+                                        isPlaying: isPlaying,
+                                      );
+                                    },
+                                  );
+                                }
+                                return IconButton(
+                                  icon: const Icon(Icons.play_circle_outline),
+                                  onPressed: () {
+                                    final home = context.read<HomeController>();
+                                    home.playSubset(
+                                      songs,
+                                      idx,
+                                      mixed: p.isMixed,
+                                      mixedId: p.isMixed ? p.id : null,
+                                      mixedTitle: p.isMixed ? p.title : null,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          );
+                        }),
+
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
-              ),
-              const Divider(height: 1),
-              if (songs.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            await home.playSubset(
-                              songs,
-                              0,
-                              mixed: p.isMixed,
-                              mixedId: p.isMixed ? p.id : null,
-                              mixedTitle: p.isMixed ? p.title : null,
-                            );
-                          },
-                          icon: const Icon(Icons.play_arrow),
-                          label: const Text('Reproducir en orden'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final shuffled = [...songs]..shuffle();
-                            await home.playSubset(
-                              shuffled,
-                              0,
-                              mixed: p.isMixed,
-                              mixedId: p.isMixed ? p.id : null,
-                              mixedTitle: p.isMixed ? p.title : null,
-                            );
-                          },
-                          icon: const Icon(Icons.shuffle),
-                          label: const Text('Reproducir aleatorio'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollCtrl,
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final s = songs[index];
-                    return ListTile(
-                      leading: const Icon(Icons.music_note),
-                      title: Text(
-                        s.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(s.artist ?? 'Desconocido', maxLines: 1),
-                      onTap: () async {
-                        await home.playSubset(
-                          songs,
-                          index,
-                          mixed: p.isMixed,
-                          mixedId: p.isMixed ? p.id : null,
-                          mixedTitle: p.isMixed ? p.title : null,
-                        );
-                      },
-                      trailing: IconButton(
-                        icon: Icon(
-                          p.isMixed
-                              ? Icons.remove_circle_outline
-                              : Icons.delete_outline,
-                        ),
-                        tooltip: p.isMixed
-                            ? 'Quitar solo de esta lista mixta'
-                            : 'Quitar de playlist',
-                        onPressed: () async {
-                          final pc2 = context.read<PlaylistController>();
-                          if (p.isMixed) {
-                            await pc2.excludeSongFromMixed(p.id, s.id);
-                          } else {
-                            await pc2.removeSongFromPlaylist(p.id, s.id);
-                          }
-                          if (mounted) Navigator.of(context).pop();
-                          if (mounted)
-                            _showPlaylistSongs(
-                              context,
-                              pc2.playlists.firstWhere((pl) => pl.id == p.id),
-                            );
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -725,12 +1075,17 @@ class _PlaylistsViewState extends State<PlaylistsView> {
   void _openAddSongsDialog(BuildContext context, Playlist playlist) {
     final home = context.read<HomeController>();
     final pc = context.read<PlaylistController>();
+    // Copiamos la lista para no afectar la original mientras filtramos
     final allSongs = home.songs;
+    // Set de IDs seleccionados (inicia con los que ya tiene la playlist)
     final selected = playlist.songIds.toSet();
     final searchCtrl = TextEditingController();
-    showDialog(
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => StatefulBuilder(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
           final q = searchCtrl.text.trim().toLowerCase();
           final filtered = q.isEmpty
@@ -739,65 +1094,264 @@ class _PlaylistsViewState extends State<PlaylistsView> {
                   return s.title.toLowerCase().contains(q) ||
                       (s.artist ?? '').toLowerCase().contains(q);
                 }).toList();
-          return AlertDialog(
-            title: Text('Agregar músicas a "${playlist.title}"'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: searchCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar',
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (_) => setState(() {}),
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
                     ),
-                    const SizedBox(height: 8),
-                    ...filtered.map((s) {
-                      final checked = selected.contains(s.id);
-                      return CheckboxListTile(
-                        value: checked,
-                        onChanged: (v) {
-                          setState(() {
-                            if (v == true) {
-                              selected.add(s.id);
-                            } else {
-                              selected.remove(s.id);
-                            }
-                          });
-                        },
-                        title: Text(
-                          s.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(s.artist ?? 'Desconocido', maxLines: 1),
-                      );
-                    }),
                   ],
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await pc.updatePlaylist(
-                    id: playlist.id,
-                    songIds: selected.toList(),
-                  );
-                  if (!mounted) return;
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Guardar'),
-              ),
-            ],
+                child: Column(
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Header con título y botón guardar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Agregar canciones',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                '${selected.length} seleccionadas',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          ElevatedButton(
+                            onPressed: () async {
+                              await pc.updatePlaylist(
+                                id: playlist.id,
+                                songIds: selected.toList(),
+                              );
+                              if (!mounted) return;
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Playlist "${playlist.title}" actualizada',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              // Refresh viewed playlist if needed
+                              // _showPlaylistSongs(context, ... ) logic handled by parent refresh usually
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Guardar'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Buscador
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: TextField(
+                        controller: searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar canciones...',
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceVariant.withOpacity(0.5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 0,
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+
+                    const Divider(),
+
+                    // Lista de canciones
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: Colors.grey.withOpacity(0.5),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No se encontraron canciones',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: scrollController,
+                              itemCount: filtered.length,
+                              padding: const EdgeInsets.only(bottom: 24),
+                              itemBuilder: (context, index) {
+                                final s = filtered[index];
+                                final isSelected = selected.contains(s.id);
+                                return ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 4,
+                                  ),
+                                  leading: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: QueryArtworkWidget(
+                                          id: int.tryParse(s.id) ?? 0,
+                                          type: ArtworkType.AUDIO,
+                                          size: 50,
+                                          nullArtworkWidget: Container(
+                                            width: 50,
+                                            height: 50,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.surfaceVariant,
+                                            child: const Icon(
+                                              Icons.music_note,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        Positioned.fill(
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withOpacity(0.6),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Center(
+                                              child: Icon(
+                                                Icons.check,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  title: Text(
+                                    s.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isSelected
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : null,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    s.artist ?? 'Desconocido',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: Checkbox(
+                                    value: isSelected,
+                                    activeColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        if (v == true) {
+                                          selected.add(s.id);
+                                        } else {
+                                          selected.remove(s.id);
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        selected.remove(s.id);
+                                      } else {
+                                        selected.add(s.id);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),

@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Define una serie de temas preconfigurados para que el usuario pueda
 /// personalizar la apariencia del reproductor.
 class ThemeController extends ChangeNotifier {
-  ThemeController();
+  ThemeController({String? initialKey}) {
+    if (initialKey != null && _themes.containsKey(initialKey)) {
+      _currentKey = initialKey;
+    }
+  }
 
   /// Identificador del tema actual.
   String _currentKey = 'red_black';
 
   String get currentKey => _currentKey;
+
+  // _loadTheme removed as we pass it in constructor for immediate availability
 
   /// Mapa de temas disponibles.
   final Map<String, ThemeData> _themes = {
@@ -18,11 +25,27 @@ class ThemeController extends ChangeNotifier {
     ),
     'dark': ThemeData(
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.indigo,
-        brightness: Brightness.dark,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFBB86FC),
+        onPrimary: Colors.black,
+        secondary: Color(0xFF03DAC6),
+        onSecondary: Colors.black,
+        surface: Color(0xFF121212),
+        onSurface: Colors.white70,
+        background: Color(0xFF121212),
+        onBackground: Colors.white,
       ),
+      scaffoldBackgroundColor: const Color(0xFF121212),
       useMaterial3: true,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF1F1F1F),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1E1E1E),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
     ),
     'red_black': ThemeData(
       brightness: Brightness.dark,
@@ -37,80 +60,90 @@ class ThemeController extends ChangeNotifier {
         error: Colors.redAccent,
         onError: Colors.white,
       ),
-      scaffoldBackgroundColor: const Color(0xFF121212),
+      scaffoldBackgroundColor: const Color(0xFF000000), // Pure black for AMOLED
       textTheme: Typography.whiteMountainView.apply(
         bodyColor: Colors.white70,
         displayColor: Colors.white70,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.black87,
+        backgroundColor: Colors.black,
         elevation: 0,
       ),
       cardTheme: CardThemeData(
+        color: const Color(0xFF1C1C1C),
         elevation: 4,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: Colors.redAccent.withOpacity(0.05),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: Colors.transparent),
         ),
-      ),
-      listTileTheme: const ListTileThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          side: BorderSide(color: Colors.transparent),
-        ),
-        tileColor: Colors.transparent,
-      ),
-      popupMenuTheme: PopupMenuThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Colors.transparent),
-        ),
-        elevation: 6,
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style:
-            OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.transparent),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: const TextStyle(fontWeight: FontWeight.w600),
-            ).copyWith(
-              overlayColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.pressed)) {
-                  return Colors.white.withOpacity(0.12);
-                }
-                return null;
-              }),
-            ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF1E1E1E),
+        fillColor: const Color(0xFF2C2C2C),
         hintStyle: const TextStyle(color: Colors.white38),
-        labelStyle: const TextStyle(color: Colors.white70),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.transparent),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white70, width: 1.4),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
+      ),
+    ),
+    'sunset': ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFFF6F00), // Amber darker
+        onPrimary: Colors.white,
+        secondary: Color(0xFFFFD180),
+        onSecondary: Colors.black,
+        surface: Color(0xFF260E04), // Deep warm brown/black
+        onSurface: Colors.white,
+        background: Color(0xFF1A0500),
+      ),
+      scaffoldBackgroundColor: const Color(0xFF1A0500),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF260E04),
+        elevation: 0,
+      ),
+    ),
+    'ocean': ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFF00B0FF),
+        onPrimary: Colors.black,
+        secondary: Color(0xFF69E2FF),
+        onSecondary: Colors.black,
+        surface: Color(0xFF001F2A), // Dark teal/blue
+        onSurface: Colors.white,
+        background: Color(0xFF001016),
+      ),
+      scaffoldBackgroundColor: const Color(0xFF001016),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF001F2A),
+        elevation: 0,
+      ),
+    ),
+    'deep_space': ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFE040FB), // PurpleAccent 200
+        onPrimary: Colors.white,
+        secondary: Color(0xFF7C4DFF), // DeepPurpleAccent 200
+        onSecondary: Colors.white,
+        surface: Color(0xFF0F0524), // Very dark purple
+        onSurface: Colors.white,
+        background: Color(0xFF050109), // Almost black
+      ),
+      scaffoldBackgroundColor: const Color(0xFF050109),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF0F0524),
+        elevation: 0,
       ),
     ),
     'blue_light': ThemeData(
@@ -119,22 +152,32 @@ class ThemeController extends ChangeNotifier {
         brightness: Brightness.light,
       ),
       useMaterial3: true,
+      appBarTheme: const AppBarTheme(elevation: 0, scrolledUnderElevation: 2),
     ),
   };
 
-  // Sólo exponer por ahora los dos temas solicitados: 'red_black' y 'dark'.
   List<String> get availableKeys {
-    final allowed = ['red_black', 'dark'];
+    // Ordenamos para mostrar primero los más interesantes
+    final allowed = [
+      'red_black',
+      'deep_space',
+      'sunset',
+      'ocean',
+      'dark',
+      'blue_light',
+    ];
     return allowed.where((k) => _themes.containsKey(k)).toList(growable: false);
   }
 
   ThemeData get theme => _themes[_currentKey] ?? _themes['default']!;
 
-  void setTheme(String key) {
+  Future<void> setTheme(String key) async {
     if (key == _currentKey) return;
     if (_themes.containsKey(key)) {
       _currentKey = key;
       notifyListeners();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('theme_key', key);
     }
   }
 }

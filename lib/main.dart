@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'services/audio_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'controllers/theme_controller.dart';
 import 'controllers/home_controller.dart';
@@ -28,10 +29,15 @@ Future<void> main() async {
   // lanzar trabajo pesado en el arranque (causando frames perdidos o
   // crashes tempranos). En su lugar inicializamos en background tras
   // arrancar la UI.
+  // Solicita permiso de notificaciones y carga preferencias antes de la UI
   await _ensureNotificationPermission();
+
+  final prefs = await SharedPreferences.getInstance();
+  final savedTheme = prefs.getString('theme_key');
+
   runApp(
     ChangeNotifierProvider(
-      create: (_) => ThemeController(),
+      create: (_) => ThemeController(initialKey: savedTheme),
       child: const MyApp(),
     ),
   );
@@ -303,307 +309,387 @@ class _ReproductorHomeState extends State<ReproductorHome>
                   child: Consumer<ThemeController>(
                     builder: (context, themeCtrl, _) {
                       final keys = themeCtrl.availableKeys;
-                      final names = <String, String>{
-                        'default': 'Clásico (Morado)',
-                        'dark': 'Oscuro',
-                        'red_black': 'Rojo & Negro',
-                        'blue_light': 'Azul (Claro)',
-                      };
-
-                      Animation<double> stagger(
-                        int index,
-                        int total, {
-                        double start = 0.12,
-                        double step = 0.06,
-                      }) {
-                        final s = (start + index * step).clamp(0.0, 1.0);
-                        final e = (s + step).clamp(0.0, 1.0);
-                        return CurvedAnimation(
-                          parent: _drawerCtrl,
-                          curve: Interval(s, e, curve: Curves.easeOut),
-                        );
-                      }
-
-                      final totalItems = 3 + keys.length;
-                      int idx = 0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          FadeTransition(
-                            opacity: stagger(idx++, totalItems),
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(-0.05, 0),
-                                end: Offset.zero,
-                              ).animate(stagger(0, totalItems)),
-                              child: Container(
-                                margin: const EdgeInsets.all(12),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Theme.of(context).primaryColor,
-                                      Theme.of(
-                                        context,
-                                      ).primaryColor.withOpacity(0.9),
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 56,
-                                      height: 56,
-                                      alignment: Alignment.center,
-                                      child: CircleAvatar(
-                                        radius: 28,
-                                        backgroundColor: Colors.white24,
-                                        backgroundImage: const AssetImage(
-                                          'assets/menu_logo.png',
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: const [
-                                          Text(
-                                            'Primek Music',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Text(
-                                            'Tu música, tu ritmo',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                          // Header
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(24, 50, 24, 30),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Theme.of(
+                                    context,
+                                  ).primaryColor.withOpacity(0.15),
+                                  Colors.transparent,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          FadeTransition(
-                            opacity: stagger(idx++, totalItems),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                              ),
-                              child: Text(
-                                'Tema',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Expanded(
-                            child: ListView(
-                              padding: EdgeInsets.zero,
+                            child: Row(
                               children: [
-                                ...keys.asMap().entries.map((entry) {
-                                  final kIndex = entry.key;
-                                  final k = entry.value;
-                                  final anim = stagger(
-                                    idx + kIndex,
-                                    totalItems,
-                                  );
-                                  return FadeTransition(
-                                    opacity: anim,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(-0.03, 0),
-                                        end: Offset.zero,
-                                      ).animate(anim),
-                                      child: RadioListTile<String>(
-                                        value: k,
-                                        groupValue: themeCtrl.currentKey,
-                                        onChanged: (v) {
-                                          if (v != null) themeCtrl.setTheme(v);
-                                        },
-                                        title: Text(names[k] ?? k),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                const Divider(),
-                                FadeTransition(
-                                  opacity: stagger(
-                                    idx + keys.length,
-                                    totalItems,
-                                  ),
-                                  child: SlideTransition(
-                                    position:
-                                        Tween<Offset>(
-                                          begin: const Offset(-0.03, 0),
-                                          end: Offset.zero,
-                                        ).animate(
-                                          stagger(
-                                            idx + keys.length,
-                                            totalItems,
-                                          ),
-                                        ),
-                                    child: ListTile(
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      leading: CircleAvatar(
-                                        backgroundColor: Theme.of(
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Theme.of(
                                           context,
-                                        ).primaryColor,
-                                        child: const Icon(
-                                          Icons.notifications,
-                                          color: Colors.white,
-                                        ),
+                                        ).primaryColor.withOpacity(0.3),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 5),
                                       ),
-                                      title: const Text('Notificaciones'),
-                                      subtitle: const Text(
-                                        'Configuración del sistema',
-                                      ),
-                                      onTap: () {
-                                        showDialog(
-                                          context: context,
-                                          builder: (_) => AlertDialog(
-                                            title: const Text('Notificaciones'),
-                                            content: const Text(
-                                              'La configuración de notificaciones se gestiona desde el sistema. En Android 13+ solicita permiso si es necesario.',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.pop(context),
-                                                child: const Text('Cerrar'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
+                                    ],
+                                  ),
+                                  child: Image.asset(
+                                    'assets/menu_logo.png',
+                                    width: 60,
+                                    height: 60,
                                   ),
                                 ),
-                                // Nuevo: Encontrar Nuevos Temas (Spotify)
-                                FadeTransition(
-                                  opacity: stagger(
-                                    idx + keys.length + 1,
-                                    totalItems,
-                                  ),
-                                  child: SlideTransition(
-                                    position:
-                                        Tween<Offset>(
-                                          begin: const Offset(-0.03, 0),
-                                          end: Offset.zero,
-                                        ).animate(
-                                          stagger(
-                                            idx + keys.length + 1,
-                                            totalItems,
-                                          ),
-                                        ),
-                                    child: ListTile(
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      leading: CircleAvatar(
-                                        backgroundColor: Theme.of(
-                                          context,
-                                        ).primaryColor,
-                                        child: const Icon(
-                                          Icons.search,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      title: const Text(
-                                        'Encontrar Nuevos Temas',
-                                      ),
-                                      subtitle: const Text('Buscar en Spotify'),
-                                      onTap: () {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Esta funcionalidad no está implementada',
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Primek Music',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.5,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-
-                                // EzConv downloader removed
-                                // Acerca de (mantenido)
-                                FadeTransition(
-                                  opacity: stagger(
-                                    idx + keys.length + 2,
-                                    totalItems,
-                                  ),
-                                  child: SlideTransition(
-                                    position:
-                                        Tween<Offset>(
-                                          begin: const Offset(-0.03, 0),
-                                          end: Offset.zero,
-                                        ).animate(
-                                          stagger(
-                                            idx + keys.length + 2,
-                                            totalItems,
-                                          ),
-                                        ),
-                                    child: ListTile(
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      leading: CircleAvatar(
-                                        backgroundColor: Theme.of(
-                                          context,
-                                        ).primaryColor,
-                                        child: const Icon(
-                                          Icons.info,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      title: const Text('Acerca de'),
-                                      subtitle: const Text('Versión 0.0.1'),
-                                      onTap: () {
-                                        showAboutDialog(
-                                          context: context,
-                                          applicationName: 'Primek Music',
-                                          applicationVersion: '0.0.1',
-                                          applicationIcon: const Icon(
-                                            Icons.music_note,
-                                          ),
-                                          children: const [
-                                            Text(
-                                              'Reproductor simple de música.',
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'v1.0.0',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
                                             ),
-                                          ],
-                                        );
-                                      },
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
+                          ),
+
+                          const SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              'APARIENCIA',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
+                            ),
+                          ),
+
+                          // Horizontal Theme Selector
+                          SizedBox(
+                            height: 70,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              itemCount: keys.length,
+                              itemBuilder: (context, index) {
+                                final k = keys[index];
+                                final isSelected = themeCtrl.currentKey == k;
+                                // Map simplistic colors for preview circles if possible, or use standard palette
+                                Color previewColor;
+                                switch (k) {
+                                  case 'dark':
+                                    previewColor = Colors.grey.shade900;
+                                    break;
+                                  case 'red_black':
+                                    previewColor = Colors.red.shade900;
+                                    break;
+                                  case 'blue_light':
+                                    previewColor = Colors.blue;
+                                    break;
+                                  case 'sunset':
+                                    previewColor = Colors.orange;
+                                    break;
+                                  case 'ocean':
+                                    previewColor = Colors.cyan;
+                                    break;
+                                  case 'deep_space':
+                                    previewColor = const Color(0xFF1A237E);
+                                    break;
+                                  default:
+                                    previewColor = Colors.deepPurple;
+                                }
+
+                                return GestureDetector(
+                                  onTap: () => themeCtrl.setTheme(k),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: previewColor,
+                                      shape: BoxShape.circle,
+                                      border: isSelected
+                                          ? Border.all(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              width: 3,
+                                            )
+                                          : Border.all(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(0.3),
+                                            ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: previewColor.withOpacity(
+                                                  0.4,
+                                                ),
+                                                blurRadius: 8,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : [],
+                                    ),
+                                    child: isSelected
+                                        ? const Icon(
+                                            Icons.check,
+                                            color: Colors.white,
+                                          )
+                                        : null,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+                          const Divider(indent: 24, endIndent: 24),
+                          const SizedBox(height: 10),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              'GENERAL',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
+                            ),
+                          ),
+
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                            ),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.notifications_outlined,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            title: Text(
+                              'Notificaciones',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 16,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text('Notificaciones'),
+                                  content: const Text(
+                                    'La configuración de notificaciones se gestiona desde el sistema.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Cerrar'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                            ),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.info_outline,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            title: Text(
+                              'Acerca de',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 16,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => Dialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).cardColor,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withOpacity(0.1),
+                                          ),
+                                          child: Image.asset(
+                                            'assets/menu_logo.png',
+                                            width: 64,
+                                            height: 64,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Primek Music',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'v1.0.0',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(color: Colors.grey),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        const Text(
+                                          'Desarrollado por',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'AbstracDev',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.secondary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        const Text(
+                                          'Tu música, tu ritmo. Disfruta de la mejor experiencia de reproducción.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(height: 1.5),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            style: ElevatedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 12,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                            child: const Text('Cerrar'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       );

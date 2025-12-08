@@ -53,6 +53,7 @@ dependencies:
   webview_flutter: ^4.13.0
   dio: ^5.9.0
   path_provider: ^2.1.5
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:

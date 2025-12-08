@@ -26,11 +26,17 @@ class PlaylistController extends ChangeNotifier {
   Future<void> createPlaylist(
     String title,
     String description,
-    List<String> songIds,
-  ) async {
+    List<String> songIds, {
+    String? imagePath,
+  }) async {
     creating = true;
     notifyListeners();
-    await _repo.createPlaylist(title, description, songIds);
+    await _repo.createPlaylist(
+      title,
+      description,
+      songIds,
+      imagePath: imagePath,
+    );
     playlists = await _repo.loadPlaylists();
     creating = false;
     notifyListeners();
@@ -39,11 +45,17 @@ class PlaylistController extends ChangeNotifier {
   Future<void> createMixedPlaylist(
     String title,
     String description,
-    List<String> childPlaylistIds,
-  ) async {
+    List<String> childPlaylistIds, {
+    String? imagePath,
+  }) async {
     creating = true;
     notifyListeners();
-    await _repo.createMixedPlaylist(title, description, childPlaylistIds);
+    await _repo.createMixedPlaylist(
+      title,
+      description,
+      childPlaylistIds,
+      imagePath: imagePath,
+    );
     playlists = await _repo.loadPlaylists();
     creating = false;
     notifyListeners();
@@ -74,6 +86,7 @@ class PlaylistController extends ChangeNotifier {
     PlaylistType? type,
     List<String>? childPlaylistIds,
     List<String>? excludedSongIds,
+    String? imagePath,
   }) async {
     await _repo.updatePlaylist(
       id: id,
@@ -83,6 +96,7 @@ class PlaylistController extends ChangeNotifier {
       type: type,
       childPlaylistIds: childPlaylistIds,
       excludedSongIds: excludedSongIds,
+      imagePath: imagePath,
     );
     playlists = await _repo.loadPlaylists();
     notifyListeners();

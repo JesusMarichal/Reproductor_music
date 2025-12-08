@@ -103,8 +103,9 @@ class PlaylistRepository {
   Future<void> createPlaylist(
     String title,
     String description,
-    List<String> songIds,
-  ) async {
+    List<String> songIds, {
+    String? imagePath,
+  }) async {
     final all = await loadPlaylists();
     final id = _generateId(title, all);
     final newPlaylist = Playlist(
@@ -115,6 +116,7 @@ class PlaylistRepository {
       type: PlaylistType.normal,
       childPlaylistIds: const [],
       excludedSongIds: const [],
+      imagePath: imagePath,
     );
     all.add(newPlaylist);
     await savePlaylists(all);
@@ -123,8 +125,9 @@ class PlaylistRepository {
   Future<void> createMixedPlaylist(
     String title,
     String description,
-    List<String> childPlaylistIds,
-  ) async {
+    List<String> childPlaylistIds, {
+    String? imagePath,
+  }) async {
     final all = await loadPlaylists();
     final id = _generateId(title, all);
     final newPlaylist = Playlist(
@@ -135,6 +138,7 @@ class PlaylistRepository {
       type: PlaylistType.mixed,
       childPlaylistIds: childPlaylistIds,
       excludedSongIds: const [],
+      imagePath: imagePath,
     );
     all.add(newPlaylist);
     await savePlaylists(all);
@@ -148,6 +152,7 @@ class PlaylistRepository {
     PlaylistType? type,
     List<String>? childPlaylistIds,
     List<String>? excludedSongIds,
+    String? imagePath,
   }) async {
     final all = await loadPlaylists();
     final index = all.indexWhere((p) => p.id == id);
@@ -159,6 +164,7 @@ class PlaylistRepository {
       type: type,
       childPlaylistIds: childPlaylistIds,
       excludedSongIds: excludedSongIds,
+      imagePath: imagePath,
     );
     all[index] = updated;
     await savePlaylists(all);

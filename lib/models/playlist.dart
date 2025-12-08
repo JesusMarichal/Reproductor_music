@@ -11,6 +11,7 @@ class Playlist {
   /// Canciones excluidas solo para listas mixtas. Permite "quitar" una canción
   /// de la vista combinada sin eliminarla de sus listas originales.
   final List<String> excludedSongIds;
+  final String? imagePath;
 
   const Playlist({
     required this.id,
@@ -20,6 +21,7 @@ class Playlist {
     this.type = PlaylistType.normal,
     this.childPlaylistIds = const [],
     this.excludedSongIds = const [],
+    this.imagePath,
   });
 
   bool get isMixed => type == PlaylistType.mixed;
@@ -32,6 +34,7 @@ class Playlist {
     PlaylistType? type,
     List<String>? childPlaylistIds,
     List<String>? excludedSongIds,
+    String? imagePath,
   }) => Playlist(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -40,6 +43,7 @@ class Playlist {
     type: type ?? this.type,
     childPlaylistIds: childPlaylistIds ?? this.childPlaylistIds,
     excludedSongIds: excludedSongIds ?? this.excludedSongIds,
+    imagePath: imagePath ?? this.imagePath,
   );
 
   Map<String, dynamic> toJson() => {
@@ -50,6 +54,7 @@ class Playlist {
     'type': type.name,
     'childPlaylistIds': childPlaylistIds,
     'excludedSongIds': excludedSongIds,
+    'imagePath': imagePath,
   };
 
   static Playlist fromJson(Map<String, dynamic> json) {
@@ -71,6 +76,7 @@ class Playlist {
       excludedSongIds: (json['excludedSongIds'] as List<dynamic>? ?? const [])
           .map((e) => e as String)
           .toList(),
+      imagePath: json['imagePath'] as String?,
     );
   }
 }
