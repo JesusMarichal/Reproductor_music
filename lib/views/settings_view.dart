@@ -14,28 +14,48 @@ class SettingsView extends StatelessWidget {
       'dark': 'Oscuro',
       'red_black': 'Rojo & Negro',
       'blue_light': 'Azul (Claro)',
+      'deep_space': 'Espacio Profundo',
+      'sunset': 'Atardecer',
+      'ocean': 'Océano',
+      'forest_green': 'Bosque Verde',
+      'minimal_gray': 'Gris Minimalista',
+      'rose_gold': 'Rosa Dorado',
+      'lavender_dream': 'Sueño Lavanda',
+      'mint_fresh': 'Menta Fresca',
+      'peach_blossom': 'Flor de Durazno',
     };
     return Scaffold(
       appBar: AppBar(title: const Text('Configuración')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const ListTile(
-            leading: Icon(Icons.palette),
-            title: Text('Tema'),
-            subtitle: Text('Personaliza los colores de la app'),
+          ExpansionTile(
+            leading: const Icon(Icons.palette),
+            title: const Text('Tema'),
+            subtitle: Text(names[themeCtrl.currentKey] ?? 'Seleccionar'),
+            children: keys.map((k) {
+              final isSelected = themeCtrl.currentKey == k;
+              return ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 32, right: 24),
+                // leading removed as requested
+                title: Text(
+                  names[k] ?? k,
+                  style: const TextStyle(fontSize: 13), // Texto pequeño
+                ),
+                trailing: isSelected
+                    ? Icon(
+                        Icons.check_circle_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      )
+                    : null,
+                onTap: () {
+                  themeCtrl.setTheme(k);
+                },
+              );
+            }).toList(),
           ),
-          ...keys.map((k) {
-            return RadioListTile<String>(
-              value: k,
-              groupValue: themeCtrl.currentKey,
-              onChanged: (v) {
-                if (v != null) themeCtrl.setTheme(v);
-              },
-              title: Text(names[k] ?? k),
-              secondary: _ThemePreviewDot(keyName: k),
-            );
-          }),
 
           const Divider(),
           const ListTile(
@@ -51,29 +71,5 @@ class SettingsView extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _ThemePreviewDot extends StatelessWidget {
-  final String keyName;
-  const _ThemePreviewDot({required this.keyName});
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    switch (keyName) {
-      case 'red_black':
-        color = const Color(0xFFD50000);
-        break;
-      case 'blue_light':
-        color = Colors.blue;
-        break;
-      case 'dark':
-        color = Colors.indigo;
-        break;
-      default:
-        color = Colors.deepPurple;
-    }
-    return CircleAvatar(radius: 10, backgroundColor: color);
   }
 }

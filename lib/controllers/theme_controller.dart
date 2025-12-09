@@ -154,6 +154,155 @@ class ThemeController extends ChangeNotifier {
       useMaterial3: true,
       appBarTheme: const AppBarTheme(elevation: 0, scrolledUnderElevation: 2),
     ),
+    'minimal_gray': ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF424242), // Dark gray
+        onPrimary: Colors.white,
+        secondary: Color(0xFF757575),
+        onSecondary: Colors.white,
+        surface: Color(0xFFF5F5F5), // Very light gray
+        onSurface: Color(0xFF212121),
+        background: Colors.white,
+        onBackground: Color(0xFF212121),
+      ),
+      scaffoldBackgroundColor: Colors.white,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFFAFAFA),
+        foregroundColor: Color(0xFF212121),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFFAFAFA),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    'rose_gold': ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFFE91E63), // Pink
+        onPrimary: Colors.white,
+        secondary: Color(0xFFF8BBD0), // Light pink
+        onSecondary: Color(0xFF880E4F),
+        surface: Color(0xFFFCE4EC), // Very light pink
+        onSurface: Color(0xFF880E4F),
+        background: Color(0xFFFFF5F7),
+        onBackground: Color(0xFF880E4F),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFFFF5F7),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFFCE4EC),
+        foregroundColor: Color(0xFF880E4F),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFFCE4EC),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    'lavender_dream': ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF9C27B0), // Purple
+        onPrimary: Colors.white,
+        secondary: Color(0xFFE1BEE7), // Light purple
+        onSecondary: Color(0xFF4A148C),
+        surface: Color(0xFFF3E5F5), // Very light purple
+        onSurface: Color(0xFF4A148C),
+        background: Color(0xFFFAF5FF),
+        onBackground: Color(0xFF4A148C),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFFAF5FF),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFF3E5F5),
+        foregroundColor: Color(0xFF4A148C),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFF3E5F5),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    'mint_fresh': ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF00BFA5), // Teal
+        onPrimary: Colors.white,
+        secondary: Color(0xFF80CBC4), // Light teal
+        onSecondary: Color(0xFF004D40),
+        surface: Color(0xFFE0F2F1), // Very light teal
+        onSurface: Color(0xFF004D40),
+        background: Color(0xFFF1F8F7),
+        onBackground: Color(0xFF004D40),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF1F8F7),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFE0F2F1),
+        foregroundColor: Color(0xFF004D40),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFE0F2F1),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    'peach_blossom': ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFFFF6F00), // Deep orange
+        onPrimary: Colors.white,
+        secondary: Color(0xFFFFCCBC), // Light orange
+        onSecondary: Color(0xFFBF360C),
+        surface: Color(0xFFFFF3E0), // Very light orange
+        onSurface: Color(0xFFBF360C),
+        background: Color(0xFFFFFAF5),
+        onBackground: Color(0xFFBF360C),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFFFFAF5),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFFFF3E0),
+        foregroundColor: Color(0xFFBF360C),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFFFF3E0),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    'forest_green': ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFF66BB6A), // Green
+        onPrimary: Colors.black,
+        secondary: Color(0xFF81C784),
+        onSecondary: Colors.black,
+        surface: Color(0xFF1B5E20), // Dark green
+        onSurface: Colors.white,
+        background: Color(0xFF0D2818),
+        onBackground: Colors.white,
+      ),
+      scaffoldBackgroundColor: const Color(0xFF0D2818),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF1B5E20),
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1B5E20),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
   };
 
   List<String> get availableKeys {
@@ -163,7 +312,13 @@ class ThemeController extends ChangeNotifier {
       'deep_space',
       'sunset',
       'ocean',
+      'forest_green',
       'dark',
+      'minimal_gray',
+      'rose_gold',
+      'lavender_dream',
+      'mint_fresh',
+      'peach_blossom',
       'blue_light',
     ];
     return allowed.where((k) => _themes.containsKey(k)).toList(growable: false);

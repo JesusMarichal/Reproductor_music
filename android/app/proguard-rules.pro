@@ -52,6 +52,18 @@
 
 -dontwarn com.google.android.play.core.tasks.Task
 
+# R8 sugerido: suprimir advertencias sobre Play Core (SplitCompat / SplitInstall)
+-dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallException
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallManager
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallManagerFactory
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallRequest$Builder
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallRequest
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallSessionState
+-dontwarn com.google.android.play.core.splitinstall.SplitInstallStateUpdatedListener
+-dontwarn com.google.android.play.core.tasks.OnFailureListener
+-dontwarn com.google.android.play.core.tasks.OnSuccessListener
+
 # Keep audio playback libraries and native bindings used by plugins to
 # prevent R8 from stripping them in release builds. These keeps help
 # avoid crashes related to missing ExoPlayer/libVLC/native classes.
@@ -68,6 +80,11 @@
 # libVLC (used by flutter_vlc_player)
 -keep class org.videolan.libvlc.** { *; }
 -dontwarn org.videolan.libvlc.**
+
+# Media3 (Newer just_audio versions)
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+-keep class com.google.common.util.concurrent.ListenableFuture
 
 # Keep Flutter plugin registration classes and common plugin namespaces
 -keep class io.flutter.plugins.** { *; }

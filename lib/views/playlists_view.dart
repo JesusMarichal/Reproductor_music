@@ -32,115 +32,139 @@ class _PlaylistsViewState extends State<PlaylistsView> {
     final pc = context.read<PlaylistController>();
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    String? selectedImagePath;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('Nueva playlist'),
-            content: Column(
+          // Calculate height to push content up when keyboard opens
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+          final hintColor = isDark ? Colors.grey[600] : Colors.grey[500];
+
+          return Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                GestureDetector(
-                  onTap: () async {
-                    final picker = ImagePicker();
-                    final picked = await picker.pickImage(
-                      source: ImageSource.gallery,
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        selectedImagePath = picked.path;
-                      });
-                    }
-                  },
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(12),
-                      image: selectedImagePath != null
-                          ? DecorationImage(
-                              image: FileImage(File(selectedImagePath!)),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: selectedImagePath == null
-                        ? Icon(
-                            Icons.add_a_photo,
-                            size: 40,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          )
-                        : null,
-                  ),
+                Text(
+                  'Ponle nombre a tu playlist',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                if (selectedImagePath != null)
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        selectedImagePath = null;
-                      });
-                    },
-                    icon: const Icon(Icons.close, size: 16),
-                    label: const Text('Quitar foto'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Agregar portada',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 32),
+
+                // Title Input - Large and Center
                 TextField(
                   controller: titleCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Título',
-                    prefixIcon: Icon(Icons.title),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Mi Playlist',
+                    hintStyle: TextStyle(
+                      color: hintColor,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: isDark ? Colors.grey[800]! : Colors.grey[400]!,
+                      ),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[500]!,
+                        width: 1,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.only(bottom: 8),
                   ),
                   autofocus: true,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
+                // Description Input (Optional)
                 TextField(
                   controller: descCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Descripción (Opcional)',
-                    prefixIcon: Icon(Icons.description),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Descripción (Opcional)',
+                    hintStyle: TextStyle(color: hintColor),
+                    border: InputBorder.none,
                   ),
+                ),
+
+                const SizedBox(height: 48),
+
+                // Action Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: textColor ?? Colors.grey,
+                      ),
+                      child: const Text('CANCELAR'),
+                    ),
+                    const SizedBox(width: 32),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final title = titleCtrl.text.trim();
+                        if (title.isEmpty) return;
+                        await pc.createPlaylist(
+                          title,
+                          descCtrl.text.trim(),
+                          [],
+                        );
+                        if (!mounted) return;
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Playlist "$title" creada')),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                      ),
+                      child: const Text(
+                        'CREAR',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final title = titleCtrl.text.trim();
-                  if (title.isEmpty) return;
-                  await pc.createPlaylist(
-                    title,
-                    descCtrl.text.trim(),
-                    [],
-                    imagePath: selectedImagePath,
-                  );
-                  if (!mounted) return;
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Playlist "$title" creada')),
-                  );
-                },
-                child: const Text('Crear'),
-              ),
-            ],
           );
         },
       ),
@@ -515,7 +539,7 @@ class _PlaylistsViewState extends State<PlaylistsView> {
                                 p.isMixed
                                     ? Icons.all_inclusive
                                     : Icons.queue_music,
-                                color: Theme.of(context).primaryColor,
+                                color: Theme.of(context).colorScheme.primary,
                               )
                             : null,
                       ),

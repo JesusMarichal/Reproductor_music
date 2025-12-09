@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart';
 import '../controllers/home_controller.dart';
 import '../views/player_view.dart';
+import 'scrolling_text.dart';
 
 class PlayerBar extends StatefulWidget {
   const PlayerBar({super.key});
@@ -19,13 +20,6 @@ class _PlayerBarState extends State<PlayerBar> {
     super.didChangeDependencies();
     final controller = context.read<HomeController>();
     _player = controller.audioService.player;
-  }
-
-  String _formatDuration(Duration? d) {
-    if (d == null) return '--:--';
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 
   @override
@@ -55,70 +49,11 @@ class _PlayerBarState extends State<PlayerBar> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    song.title,
+                  ScrollingText(
+                    text: song.title,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   Text(song.artist ?? '', style: const TextStyle(fontSize: 12)),
-                  // Progress
-                  StreamBuilder<Duration?>(
-                    stream: _player.durationStream,
-                    builder: (context, snapshotDuration) {
-                      final duration = snapshotDuration.data ?? Duration.zero;
-                      return StreamBuilder<Duration>(
-                        stream: _player.positionStream,
-                        builder: (context, snapshotPosition) {
-                          final position =
-                              snapshotPosition.data ?? Duration.zero;
-                          final max = duration > Duration.zero
-                              ? duration.inMilliseconds.toDouble()
-                              : 1.0;
-                          final value = position.inMilliseconds
-                              .toDouble()
-                              .clamp(0.0, max);
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: SliderTheme(
-                                  data: SliderTheme.of(context).copyWith(
-                                    trackHeight: 4,
-                                    thumbShape: const RoundSliderThumbShape(
-                                      enabledThumbRadius: 8,
-                                    ),
-                                    overlayShape: const RoundSliderOverlayShape(
-                                      overlayRadius: 14,
-                                    ),
-                                    activeTrackColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    inactiveTrackColor: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.18),
-                                    thumbColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  child: Slider(
-                                    value: value,
-                                    max: max,
-                                    onChanged: (v) {
-                                      _player.seek(
-                                        Duration(milliseconds: v.toInt()),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${_formatDuration(position)}/${_formatDuration(duration)}',
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
                 ],
               ),
             ),

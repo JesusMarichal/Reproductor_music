@@ -403,7 +403,6 @@ class _FavoritesViewState extends State<FavoritesView>
         // Player bar fijo al fondo si hay una canción seleccionada
         if (controller.currentIndex != -1) ...[
           const SizedBox(height: 8),
-          const Divider(height: 1),
           const PlayerBar(),
         ],
       ],

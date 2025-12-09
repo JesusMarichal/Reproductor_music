@@ -4,6 +4,8 @@
     <!-- For Android 13+ use READ_MEDIA_AUDIO; for older Android use READ_EXTERNAL_STORAGE -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Notifications permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Requeridos por audio_service para mantener servicio en foreground -->
@@ -14,6 +16,7 @@
     <application
         android:label="Primek Music"
         android:name="${applicationName}"
+        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

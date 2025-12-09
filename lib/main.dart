@@ -406,89 +406,80 @@ class _ReproductorHomeState extends State<ReproductorHome>
                             ),
                           ),
 
-                          // Horizontal Theme Selector
-                          SizedBox(
-                            height: 70,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              itemCount: keys.length,
-                              itemBuilder: (context, index) {
-                                final k = keys[index];
-                                final isSelected = themeCtrl.currentKey == k;
-                                // Map simplistic colors for preview circles if possible, or use standard palette
-                                Color previewColor;
-                                switch (k) {
-                                  case 'dark':
-                                    previewColor = Colors.grey.shade900;
-                                    break;
-                                  case 'red_black':
-                                    previewColor = Colors.red.shade900;
-                                    break;
-                                  case 'blue_light':
-                                    previewColor = Colors.blue;
-                                    break;
-                                  case 'sunset':
-                                    previewColor = Colors.orange;
-                                    break;
-                                  case 'ocean':
-                                    previewColor = Colors.cyan;
-                                    break;
-                                  case 'deep_space':
-                                    previewColor = const Color(0xFF1A237E);
-                                    break;
-                                  default:
-                                    previewColor = Colors.deepPurple;
-                                }
-
-                                return GestureDetector(
-                                  onTap: () => themeCtrl.setTheme(k),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: previewColor,
-                                      shape: BoxShape.circle,
-                                      border: isSelected
-                                          ? Border.all(
+                          // Theme Selector Dropdown
+                          Builder(
+                            builder: (context) {
+                              final names = <String, String>{
+                                'default': 'Clásico (Morado)',
+                                'dark': 'Oscuro',
+                                'red_black': 'Rojo & Negro',
+                                'blue_light': 'Azul (Claro)',
+                                'deep_space': 'Espacio Profundo',
+                                'sunset': 'Atardecer',
+                                'ocean': 'Océano',
+                                'forest_green': 'Bosque Verde',
+                                'minimal_gray': 'Gris Minimalista',
+                                'rose_gold': 'Rosa Dorado',
+                                'lavender_dream': 'Sueño Lavanda',
+                                'mint_fresh': 'Menta Fresca',
+                                'peach_blossom': 'Flor de Durazno',
+                              };
+                              return Theme(
+                                data: Theme.of(
+                                  context,
+                                ).copyWith(dividerColor: Colors.transparent),
+                                child: ExpansionTile(
+                                  leading: const Icon(Icons.palette_outlined),
+                                  title: const Text('Tema'),
+                                  subtitle: Text(
+                                    names[themeCtrl.currentKey] ??
+                                        'Seleccionar',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  shape:
+                                      const Border(), // Remove expanded borders
+                                  collapsedShape:
+                                      const Border(), // Remove collapsed borders
+                                  children: keys.map((k) {
+                                    final isSelected =
+                                        themeCtrl.currentKey == k;
+                                    return ListTile(
+                                      dense: true,
+                                      contentPadding: const EdgeInsets.only(
+                                        left: 32,
+                                        right: 24,
+                                      ),
+                                      title: Text(
+                                        names[k] ?? k,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSelected
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.primary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      trailing: isSelected
+                                          ? Icon(
+                                              Icons.check,
+                                              size: 16,
                                               color: Theme.of(
                                                 context,
                                               ).colorScheme.primary,
-                                              width: 3,
                                             )
-                                          : Border.all(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                                  .withOpacity(0.3),
-                                            ),
-                                      boxShadow: isSelected
-                                          ? [
-                                              BoxShadow(
-                                                color: previewColor.withOpacity(
-                                                  0.4,
-                                                ),
-                                                blurRadius: 8,
-                                                spreadRadius: 2,
-                                              ),
-                                            ]
-                                          : [],
-                                    ),
-                                    child: isSelected
-                                        ? const Icon(
-                                            Icons.check,
-                                            color: Colors.white,
-                                          )
-                                        : null,
-                                  ),
-                                );
-                              },
-                            ),
+                                          : null,
+                                      onTap: () => themeCtrl.setTheme(k),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            },
                           ),
 
                           const SizedBox(height: 20),

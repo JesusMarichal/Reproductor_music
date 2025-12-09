@@ -385,10 +385,15 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                   isVideo
                                       ? (videoCtrl.currentTitle ?? 'Video')
                                       : (song?.title ?? ''),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
                                     height: 1.2,
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? Colors.black87
+                                        : Colors.white,
                                   ),
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
@@ -401,7 +406,11 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                       : (song?.artist ?? 'Desconocido'),
                                   style: TextStyle(
                                     fontSize: 16,
-                                    color: Colors.white.withOpacity(0.6),
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? Colors.black54
+                                        : Colors.white.withOpacity(0.6),
                                     fontWeight: FontWeight.w500,
                                   ),
                                   maxLines: 1,
@@ -447,6 +456,17 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                 sliderValue = _dragValue.clamp(0.0, maxMs);
                               }
 
+                              final inactiveTrackColor =
+                                  Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Colors.black12
+                                  : Colors.white.withOpacity(0.15);
+                              final thumbColor =
+                                  Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? primaryColor
+                                  : Colors.white;
+
                               return Column(
                                 children: [
                                   SliderTheme(
@@ -461,9 +481,8 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                             overlayRadius: 20,
                                           ),
                                       activeTrackColor: primaryColor,
-                                      inactiveTrackColor: Colors.white
-                                          .withOpacity(0.15),
-                                      thumbColor: Colors.white,
+                                      inactiveTrackColor: inactiveTrackColor,
+                                      thumbColor: thumbColor,
                                     ),
                                     child: Slider(
                                       value: sliderValue,
@@ -508,9 +527,11 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
-                                            color: Colors.white.withOpacity(
-                                              0.5,
-                                            ),
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.light
+                                                ? Colors.black54
+                                                : Colors.white.withOpacity(0.5),
                                           ),
                                         ),
                                         Text(
@@ -518,9 +539,11 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
-                                            color: Colors.white.withOpacity(
-                                              0.5,
-                                            ),
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.light
+                                                ? Colors.black54
+                                                : Colors.white.withOpacity(0.5),
                                           ),
                                         ),
                                       ],
@@ -556,7 +579,10 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                   Icons.shuffle,
                                   color: shuffling
                                       ? primaryColor
-                                      : Colors.white.withOpacity(0.6),
+                                      : (Theme.of(context).brightness ==
+                                                Brightness.light
+                                            ? Colors.black54
+                                            : Colors.white60),
                                 ),
                                 tooltip: 'Aleatorio',
                               );
@@ -566,7 +592,10 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                             iconSize: 42,
                             onPressed: controller.previous,
                             icon: const Icon(Icons.skip_previous_rounded),
-                            color: Colors.white,
+                            color:
+                                Theme.of(context).brightness == Brightness.light
+                                ? Colors.black87
+                                : Colors.white,
                           ),
 
                           StreamBuilder<bool>(
@@ -597,7 +626,12 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                                         ? Icons.pause_rounded
                                         : Icons.play_arrow_rounded,
                                   ),
-                                  color: Colors.black, // High contrast
+                                  // El botón de reproducción siempre tiene fondo de color primario,
+                                  // el icono debe contrastar (usualmente blanco o negro según el primario,
+                                  // pero aquí forzamos onPrimary si fuera posible, o ajustamos a mano).
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
                                 ),
                               );
                             },
@@ -607,7 +641,10 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                             iconSize: 42,
                             onPressed: controller.next,
                             icon: const Icon(Icons.skip_next_rounded),
-                            color: Colors.white,
+                            color:
+                                Theme.of(context).brightness == Brightness.light
+                                ? Colors.black87
+                                : Colors.white,
                           ),
 
                           StreamBuilder<LoopMode>(
@@ -618,7 +655,11 @@ class _PlayerViewState extends State<PlayerView> with TickerProviderStateMixin {
                             builder: (context, snap) {
                               final mode = snap.data ?? LoopMode.off;
                               IconData icon;
-                              Color color = Colors.white.withOpacity(0.6);
+                              Color color =
+                                  (Theme.of(context).brightness ==
+                                      Brightness.light
+                                  ? Colors.black54
+                                  : Colors.white60);
                               if (mode == LoopMode.one) {
                                 icon = Icons.repeat_one_rounded;
                                 color = primaryColor;
@@ -676,11 +717,15 @@ void _showAddToPlaylistSheet(BuildContext context) {
   final playlists = pc.playlists;
   showModalBottomSheet(
     context: context,
-    backgroundColor: const Color(0xFF1E1E1E),
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Theme aware
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) {
+      final isLight = Theme.of(ctx).brightness == Brightness.light;
+      final textColor = isLight ? Colors.black87 : Colors.white;
+      final subtitleColor = isLight ? Colors.black54 : Colors.white54;
+
       if (playlists.isEmpty) {
         return SizedBox(
           height: 200,
@@ -688,9 +733,9 @@ void _showAddToPlaylistSheet(BuildContext context) {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'No hay playlists',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: subtitleColor),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
@@ -715,15 +760,15 @@ void _showAddToPlaylistSheet(BuildContext context) {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white10,
+                  color: isLight ? Colors.black12 : Colors.white10,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.queue_music, color: Colors.white),
+                child: Icon(Icons.queue_music, color: textColor),
               ),
-              title: Text(p.title, style: const TextStyle(color: Colors.white)),
+              title: Text(p.title, style: TextStyle(color: textColor)),
               subtitle: Text(
                 p.description.isEmpty ? 'Sin descripción' : p.description,
-                style: const TextStyle(color: Colors.white54),
+                style: TextStyle(color: subtitleColor),
               ),
               onTap: () async {
                 await pc.addSongToPlaylist(p.id);

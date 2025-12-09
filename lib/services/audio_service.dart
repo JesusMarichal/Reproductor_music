@@ -7,85 +7,42 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart' as a;
 import 'package:audio_session/audio_session.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 
 /// Handler que integra JustAudio con audio_service para exponer estado a
 /// notificaciones del sistema (Android) y controles externos.
 class _MyAudioHandler extends a.BaseAudioHandler
     with a.QueueHandler, a.SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer(
+    audioLoadConfiguration: AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        // Buffer mínimo (12s) para gestión balanceada
+        minBufferDuration: const Duration(seconds: 12),
+        maxBufferDuration: const Duration(seconds: 40),
+        // INICIO RÁPIDO: Solo 500ms para empezar a sonar
+        bufferForPlaybackDuration: const Duration(milliseconds: 500),
+        // RECUPERACIÓN RÁPIDA: Solo 1s para volver a sonar si se traba
+        bufferForPlaybackAfterRebufferDuration: const Duration(
+          milliseconds: 1000,
+        ),
+        prioritizeTimeOverSizeThresholds: true,
+        backBufferDuration: const Duration(seconds: 20),
+      ),
+      darwinLoadControl: const DarwinLoadControl(
+        preferredForwardBufferDuration: Duration(seconds: 10),
+      ),
+    ),
+  );
   String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
+  bool _playingBeforeInterruption = false;
 
   _MyAudioHandler() {
     _notifyPlaybackEvents();
     _listenForDurationChanges();
     _listenForCurrentSongChanges();
     _initSession();
-    _attachDiagnostics(); // Logs avanzados y monitor de 'stall'.
-    // Transiciones: si tu versión de just_audio soporta crossfade, usa:
-    // _player.setClip(...); (No disponible aquí) Mantendremos configuración simple.
-  }
-
-  // --- Diagnósticos avanzados opcionales ---
-  Timer? _stallTimer;
-  Duration _lastPosition = Duration.zero;
-  int _stallTicks = 0;
-  static const int _stallThresholdSeconds =
-      6; // Si posición no avanza por 6s -> posible bloqueo.
-
-  void _attachDiagnostics() {
-    // Solo en modo debug para evitar ruido en producción.
-    if (!kDebugMode) return;
-
-    // Log de secuencia/cola para detectar inconsistencias.
-    _player.sequenceStateStream.listen(
-      (seqState) {
-        final current = seqState.currentSource;
-        final sequenceLength = seqState.sequence.length;
-        final index = seqState.currentIndex;
-        debugPrint(
-          '[AudioDiag] sequenceState: len=$sequenceLength index=$index source=${current?.tag}',
-        );
-      },
-      onError: (e, st) {
-        debugPrint('[AudioDiag] sequenceStateStream error: $e');
-      },
-    );
-
-    // Monitor de avance de posición para detectar stalls (buffer lock / crash silencioso).
-    _stallTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      try {
-        final pos = _player.position;
-        if (_player.playing) {
-          if (pos == _lastPosition) {
-            _stallTicks++;
-          } else {
-            _stallTicks = 0;
-          }
-          if (_stallTicks >= _stallThresholdSeconds) {
-            debugPrint(
-              '[AudioDiag] Posición no avanza hace ${_stallTicks}s (pos=$pos, buffered=${_player.bufferedPosition}, processing=${_player.processingState})',
-            );
-            _stallTicks = 0; // Evitar spam continuo.
-          }
-        } else {
-          _stallTicks = 0; // Reset si no está reproduciendo.
-        }
-        _lastPosition = pos;
-      } catch (e) {
-        debugPrint('[AudioDiag] Stall monitor error: $e');
-      }
-    });
-
-    // Log de errores en position/distraction potenciales.
-    _player.playbackEventStream.listen((event) {
-      if (!kDebugMode) return; // Doble guard por si se cambia en runtime.
-      if (event.processingState == ProcessingState.buffering) {
-        debugPrint(
-          '[AudioDiag] buffering… pos=${_player.position} buffered=${_player.bufferedPosition}',
-        );
-      }
-    });
+    // logs y monitor debug opcional desactivado para release.
   }
 
   Future<void> _initSession() async {
@@ -112,16 +69,31 @@ class _MyAudioHandler extends a.BaseAudioHandler
       // Manejo básico de interrupciones (llamadas, alarmas, etc.).
       session.interruptionEventStream.listen((event) {
         if (event.begin) {
-          if (event.type == AudioInterruptionType.pause ||
-              event.type == AudioInterruptionType.duck) {
-            if (_player.playing) {
-              pause();
-            }
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_player.playing) {
+                _playingBeforeInterruption = true;
+                pause();
+              }
+              break;
+            default:
+              break;
           }
         } else {
-          // Reanudar sólo si se desea (aquí lo dejamos manual para evitar sorpresas).
-          // Podríamos auto-reanudar si event.type == AudioInterruptionType.pause
-          // y event.shouldResume es true.
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_playingBeforeInterruption) {
+                play();
+                _playingBeforeInterruption = false;
+              }
+              break;
+            default:
+              break;
+          }
         }
       });
     } catch (e) {
@@ -180,6 +152,13 @@ class _MyAudioHandler extends a.BaseAudioHandler
         debugPrint(
           'PlayerState -> playing=${state.playing} processing=${state.processingState}',
         );
+        if (state.playing &&
+            state.processingState != ProcessingState.completed &&
+            state.processingState != ProcessingState.idle) {
+          WakelockPlus.enable();
+        } else {
+          WakelockPlus.disable();
+        }
       },
       onError: (Object e, StackTrace st) {
         debugPrint('playerStateStream error: $e');
@@ -293,14 +272,14 @@ class _MyAudioHandler extends a.BaseAudioHandler
           title: s.title,
           artist: s.artist ?? 'Desconocido',
           album: s.album,
-          // Evitamos proporcionar `artUri` aquí para que Android no muestre
-          // un "large icon" cuadrado en la notificación que puede verse
-          // visualmente extraño en algunos launchers/versión de Android.
-          // Si se desea mostrar artwork, podemos gestionar un recurso
-          // distinto o una versión circular/recortada, pero por simplicidad
-          // dejamos `artUri` en null para que la notificación use solo el
-          // icono de notificación pequeño (`ic_stat_music`).
-          artUri: null,
+          // Se habilita artUri para mostrar la carátula del álbum en la notificación,
+          // lo que le da el aspecto "bello" y completo (estilo Spotify/YouTube).
+          // Android automáticamente usa esto como fondo/icono grande.
+          artUri: s.albumId != null
+              ? Uri.parse(
+                  'content://media/external/audio/albumart/${s.albumId}',
+                )
+              : null,
           duration: s.duration != null
               ? Duration(milliseconds: s.duration!)
               : null,
@@ -369,7 +348,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
   }
 
   Future<void> dispose() async {
-    _stallTimer?.cancel();
+    // _stallTimer no existe en release.
     await _player.dispose();
   }
 }

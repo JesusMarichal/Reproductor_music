@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math' as math;
+
 import 'package:on_audio_query/on_audio_query.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/player_bar.dart';
@@ -27,9 +27,8 @@ String formatDuration(int? ms) {
 class HomeViewState extends State<HomeView>
     with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
-  late final ValueNotifier<double> _scrollOffset;
   late final AnimationController _animController;
-  late final Animation<double> _pulse;
+  // _pulse removed as it was unused in new design
 
   @override
   void initState() {
@@ -41,34 +40,28 @@ class HomeViewState extends State<HomeView>
     });
 
     _scrollController = ScrollController();
-    _scrollOffset = ValueNotifier<double>(0.0);
-    _scrollController.addListener(_onScroll);
+    // _scrollOffset removed
 
     // Animation para destacar la pista en reproducción (pulso + ligero tilt)
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _pulse = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
-    );
+    // _pulse definition removed
     // La animación se controlará dinámicamente según el estado de reproducción
     // (se inicia/paraliza en el StreamBuilder de cada item).
-  }
-
-  void _onScroll() {
-    _scrollOffset.value = _scrollController.offset;
   }
 
   @override
   void dispose() {
     _animController.dispose();
-    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _scrollOffset.dispose();
     super.dispose();
   }
 
+  // Pequeño indicador visual junto a la duración que pulsa cuando la pista
+  // está en reproducción. Reutiliza la animación `_pulse` ya definida.
+  @override
   // Pequeño indicador visual junto a la duración que pulsa cuando la pista
   // está en reproducción. Reutiliza la animación `_pulse` ya definida.
   @override
@@ -116,251 +109,124 @@ class HomeViewState extends State<HomeView>
               await controller.loadSongs();
             },
             child: ListView.builder(
-              physics:
-                  const AlwaysScrollableScrollPhysics(), // Ensure scroll allows refresh even if list is short
+              physics: const AlwaysScrollableScrollPhysics(),
               controller: _scrollController,
               itemCount: controller.songs.length,
-              itemExtent: 84,
               itemBuilder: (context, index) {
                 final song = controller.songs[index];
                 final intSongId = int.tryParse(song.id) ?? 0;
+                final isPlaying = index == controller.currentIndex;
+                final isActuallyPlaying =
+                    isPlaying && controller.audioService.player.playing;
 
-                final card = Padding(
-                  // Un poco más de espacio vertical para distinguir cartas
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12.0,
-                    vertical: 6.0,
-                  ),
-                  child: RepaintBoundary(
-                    child: Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () async {
-                          // Pausar video si estuviera reproduciendo
-                          try {
-                            final vc = VideoControllerAccess.instanceOrNull();
-                            if (vc?.pauseIfPlaying != null)
-                              vc!.pauseIfPlaying!();
-                          } catch (_) {}
-                          final navigator = Navigator.of(context);
-                          final isSame = index == controller.currentIndex;
-                          final isPlaying =
-                              controller.audioService.player.playing;
-                          // Si ya está abierta, sólo ajustar reproducción
-                          if (PlayerView.isOpen || controller.playerViewOpen) {
-                            if (!isSame) {
-                              await controller.playAt(index);
-                            } else if (!isPlaying) {
-                              await controller.togglePlayPause();
-                            }
-                            return;
-                          }
-                          if (isSame) {
-                            await controller.togglePlayPause();
-                          } else {
-                            await controller.playAt(index);
-                          }
-                          // Removed auto-navigation to player view per user request
-                        },
-                        child: SizedBox(
-                          height: 68,
-                          child: Row(
+                return InkWell(
+                  onTap: () async {
+                    try {
+                      final vc = VideoControllerAccess.instanceOrNull();
+                      if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
+                    } catch (_) {}
+                    final navigator = Navigator.of(context);
+                    final isSame = index == controller.currentIndex;
+                    final playing = controller.audioService.player.playing;
+
+                    if (PlayerView.isOpen || controller.playerViewOpen) {
+                      if (!isSame) {
+                        await controller.playAt(index);
+                      } else if (!playing) {
+                        await controller.togglePlayPause();
+                      }
+                      return;
+                    }
+                    if (isSame) {
+                      await controller.togglePlayPause();
+                    } else {
+                      await controller.playAt(index);
+                    }
+                  },
+                  child: Container(
+                    height: 64, // Altura compacta estilo Spotify
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        // Album Art
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: QueryArtworkWidget(
+                            id: intSongId,
+                            type: ArtworkType.AUDIO,
+                            artworkBorder: BorderRadius.zero,
+                            keepOldArtwork: true,
+                            nullArtworkWidget: Container(
+                              width: 48,
+                              height: 48,
+                              color: Colors.grey[850],
+                              child: const Icon(
+                                Icons.music_note,
+                                size: 24,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            size: 48,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Title & Artist
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8.0,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: QueryArtworkWidget(
-                                    id: intSongId,
-                                    type: ArtworkType.AUDIO,
-                                    artworkBorder: BorderRadius.zero,
-                                    keepOldArtwork: true,
-                                    nullArtworkWidget: Container(
-                                      width: 56,
-                                      height: 56,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary.withOpacity(0.12),
-                                      child: const Icon(
-                                        Icons.music_note,
-                                        size: 28,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    size: 56,
-                                  ),
+                              Text(
+                                song.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: isPlaying
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      song.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${song.artist ?? 'Desconocido'}${(song.album != null && song.album!.isNotEmpty) ? ' • ${song.album}' : ''}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      formatDuration(song.duration),
-                                      style: TextStyle(
-                                        color: Colors.grey[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Indicador solo visible para la pista actual; para evitar
-                                    // reflujo, mostramos un SizedBox en caso contrario.
-                                    if (index == controller.currentIndex)
-                                      StreamBuilder<bool>(
-                                        stream: controller
-                                            .audioService
-                                            .player
-                                            .playingStream,
-                                        initialData: controller
-                                            .audioService
-                                            .player
-                                            .playing,
-                                        builder: (context, snap) {
-                                          final playing = snap.data ?? false;
-                                          // Controlamos el inicio/parada de la animación
-                                          // fuera del flujo de render para evitar efectos
-                                          // secundarios durante el build.
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                                if (!mounted) return;
-                                                if (playing) {
-                                                  if (!_animController
-                                                      .isAnimating) {
-                                                    _animController.repeat(
-                                                      reverse: true,
-                                                    );
-                                                  }
-                                                } else {
-                                                  if (_animController
-                                                      .isAnimating) {
-                                                    _animController.stop();
-                                                  }
-                                                }
-                                              });
-
-                                          return NowPlayingIndicator(
-                                            isPlaying: playing,
-                                            barWidth: 3,
-                                            minHeight: 3,
-                                            maxHeight: 12,
-                                          );
-                                        },
-                                      )
-                                    else
-                                      const SizedBox(width: 28),
-                                  ],
+                              const SizedBox(height: 4),
+                              Text(
+                                '${song.artist ?? 'Desconocido'}', // Simplificado, sin album para look más limpio
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
+                        // Playing Indicator or Options
+                        if (isActuallyPlaying) ...[
+                          const SizedBox(width: 8),
+                          NowPlayingIndicator(
+                            isPlaying: true,
+                            barWidth: 2,
+                            minHeight: 4,
+                            maxHeight: 14,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 16),
+                        ],
+
+                        IconButton(
+                          icon: Icon(
+                            Icons.more_vert,
+                            color: Colors.grey[500],
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            // TODO: Show modal bottom sheet with options
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                );
-
-                Widget decorated = card;
-                if (index == controller.currentIndex &&
-                    controller.audioService.player.playing) {
-                  decorated = AnimatedBuilder(
-                    animation: _pulse,
-                    builder: (context, child) {
-                      final p = _pulse.value;
-                      final base = Theme.of(context).colorScheme.primary;
-                      final innerAlpha = 0.10 + 0.18 * p;
-                      final radius = 0.9 + 0.25 * p;
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 6.0,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  gradient: RadialGradient(
-                                    center: const Alignment(-0.2, -0.1),
-                                    radius: radius,
-                                    colors: [
-                                      base.withOpacity(innerAlpha),
-                                      base.withOpacity(0.0),
-                                    ],
-                                    stops: const [0.0, 1.0],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          child!,
-                        ],
-                      );
-                    },
-                    child: card,
-                  );
-                }
-
-                return ValueListenableBuilder<double>(
-                  valueListenable: _scrollOffset,
-                  builder: (context, offset, _) {
-                    final viewport = MediaQuery.of(context).size.height;
-                    const itemH = 84.0;
-                    final itemTop = index * itemH;
-                    final itemCenter = itemTop + itemH / 2;
-                    final screenCenter = offset + viewport / 2;
-                    final dist = (itemCenter - screenCenter).abs();
-                    final norm = (dist / viewport).clamp(0.0, 1.0);
-                    final translateY = norm * 18; // pixels
-                    final scale = 1 - math.min(norm * 0.06, 0.06).toDouble();
-                    final opacity = 1 - math.min(norm * 0.6, 0.6).toDouble();
-                    return Opacity(
-                      opacity: opacity,
-                      child: Transform.translate(
-                        offset: Offset(0, translateY),
-                        child: Transform.scale(
-                          scale: scale,
-                          alignment: Alignment.center,
-                          child: decorated,
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
             ),
@@ -368,7 +234,6 @@ class HomeViewState extends State<HomeView>
         ),
         if (controller.currentIndex != -1) ...[
           const SizedBox(height: 8),
-          const Divider(height: 1),
           const PlayerBar(),
         ],
       ],
