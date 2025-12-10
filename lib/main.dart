@@ -308,7 +308,7 @@ class _ReproductorHomeState extends State<ReproductorHome>
                   icon: Icon(Icons.playlist_play),
                   label: 'Listas',
                 ),
-                BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'TV'),
+                BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'Videos'),
               ],
             ),
           ),

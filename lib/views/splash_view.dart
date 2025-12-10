@@ -57,7 +57,7 @@ class _SplashViewState extends State<SplashView>
                 child: Container(
                   width: size.width * 0.5,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
+                    shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.25),
