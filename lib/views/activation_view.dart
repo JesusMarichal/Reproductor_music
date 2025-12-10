@@ -110,7 +110,7 @@ class _ActivationViewState extends State<ActivationView> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'El reproductor más completo para tu TV y Música.\n\n'
+                    'El reproductor más completo para tu Música y Videos.\n\n'
                     'Para comenzar, dinos tu nombre y usa el código "000000" para tu prueba de 7 días.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(

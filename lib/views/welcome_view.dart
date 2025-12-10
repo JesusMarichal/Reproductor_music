@@ -27,6 +27,20 @@ class _WelcomeViewState extends State<WelcomeView> {
   @override
   void initState() {
     super.initState();
+    _initWelcome();
+  }
+
+  Future<void> _initWelcome() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('user_name') ?? '';
+    // Si tenemos nombre, actualizamos el primer mensaje
+    if (name.isNotEmpty) {
+      // Capitalizar primera letra por elegancia
+      final capitalized = name.length > 1
+          ? '${name[0].toUpperCase()}${name.substring(1)}'
+          : name.toUpperCase();
+      _texts[0] = 'Hola, $capitalized';
+    }
     _startSequence();
   }
 
@@ -123,16 +137,9 @@ class _WelcomeViewState extends State<WelcomeView> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
+
               // Spinner estilo Windows (puntos) solo si no es el mensaje final
-              if (_currentIndex < _texts.length - 1)
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                  ),
-                ),
+              // Spinner removido por solicitud
             ],
           ),
         ),
