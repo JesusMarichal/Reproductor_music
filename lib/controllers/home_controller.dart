@@ -63,12 +63,19 @@ class HomeController extends BaseController {
 
   Future<void> _loadFavorites() async {
     favorites = await _favRepo.loadFavorites();
+    audioService.updateFavorites(favorites);
     notifyListeners();
   }
 
   void _bindPlayer() {
     final player = audioService.player;
-    // Mapear canción actual basándonos en la etiqueta MediaItem (id = uri),
+
+    // Configurar callback para toggle desde notificación
+    audioService.setFavoriteCallback((id) => toggleFavoriteById(id));
+    // Inicializar favoritos en el servicio
+    audioService.updateFavorites(favorites);
+
+    // Mapea canción actual basándonos en la etiqueta MediaItem (id = uri),
     // para que funcione aunque la cola activa sea un subconjunto (favoritos).
     _currentIndexSub = player.sequenceStateStream.listen((seqState) {
       try {
@@ -102,6 +109,7 @@ class HomeController extends BaseController {
       favorites.add(id);
     }
     await _favRepo.saveFavorites(favorites);
+    audioService.updateFavorites(favorites);
     notifyListeners();
   }
 

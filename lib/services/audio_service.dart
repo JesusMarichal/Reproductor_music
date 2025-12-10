@@ -37,12 +37,35 @@ class _MyAudioHandler extends a.BaseAudioHandler
   String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
   bool _playingBeforeInterruption = false;
 
+  // Callbacks y estado para favoritos
+  Future<void> Function(String)? onFavoriteToggled;
+  Set<String> _favorites = {};
+
+  static const _favoriteAction = a.MediaControl(
+    androidIcon: 'drawable/ic_action_favorite_border',
+    label: 'Favorito',
+    action: a.MediaAction.custom,
+    customAction: a.CustomMediaAction(name: 'favorite'),
+  );
+
+  static const _unfavoriteAction = a.MediaControl(
+    androidIcon: 'drawable/ic_action_favorite',
+    label: 'Quitar favorito',
+    action: a.MediaAction.custom,
+    customAction: a.CustomMediaAction(name: 'unfavorite'),
+  );
+
   _MyAudioHandler() {
     _notifyPlaybackEvents();
     _listenForDurationChanges();
     _listenForCurrentSongChanges();
     _initSession();
     // logs y monitor debug opcional desactivado para release.
+  }
+
+  void updateFavorites(Set<String> favs) {
+    _favorites = favs;
+    _broadcastState();
   }
 
   Future<void> _initSession() async {
@@ -105,42 +128,8 @@ class _MyAudioHandler extends a.BaseAudioHandler
   // construya una notificación con controles dinámicos.
   void _notifyPlaybackEvents() {
     _player.playbackEventStream.listen(
-      (event) {
-        final playing = _player.playing;
-        final processingState = () {
-          switch (_player.processingState) {
-            case ProcessingState.idle:
-              return a.AudioProcessingState.idle;
-            case ProcessingState.loading:
-              return a.AudioProcessingState.loading;
-            case ProcessingState.buffering:
-              return a.AudioProcessingState.buffering;
-            case ProcessingState.ready:
-              return a.AudioProcessingState.ready;
-            case ProcessingState.completed:
-              return a.AudioProcessingState.completed;
-          }
-        }();
-
-        playbackState.add(
-          playbackState.value.copyWith(
-            controls: [
-              if (queue.value.isNotEmpty) a.MediaControl.skipToPrevious,
-              if (playing) a.MediaControl.pause else a.MediaControl.play,
-              if (queue.value.isNotEmpty) a.MediaControl.skipToNext,
-              a.MediaControl.stop,
-            ],
-            androidCompactActionIndices: const [0, 1, 2],
-            processingState: processingState,
-            playing: playing,
-            speed: _player.speed,
-            updatePosition: _player.position,
-            bufferedPosition: _player.bufferedPosition,
-          ),
-        );
-      },
+      (event) => _broadcastState(),
       onError: (Object e, StackTrace st) {
-        // Log detallado para diagnosticar "crasheos" o fallos intermitentes.
         debugPrint('JustAudio playbackEventStream error: $e');
         debugPrint('$st');
       },
@@ -159,11 +148,78 @@ class _MyAudioHandler extends a.BaseAudioHandler
         } else {
           WakelockPlus.disable();
         }
+        // Force update UI for play/pause state changes if not covered by playbackEventStream
+        _broadcastState();
       },
       onError: (Object e, StackTrace st) {
         debugPrint('playerStateStream error: $e');
       },
     );
+  }
+
+  void _broadcastState() {
+    final playing = _player.playing;
+    final processingState = () {
+      switch (_player.processingState) {
+        case ProcessingState.idle:
+          return a.AudioProcessingState.idle;
+        case ProcessingState.loading:
+          return a.AudioProcessingState.loading;
+        case ProcessingState.buffering:
+          return a.AudioProcessingState.buffering;
+        case ProcessingState.ready:
+          return a.AudioProcessingState.ready;
+        case ProcessingState.completed:
+          return a.AudioProcessingState.completed;
+      }
+    }();
+
+    // Determinar ícono de favorito
+    final index = _player.currentIndex;
+    final currentId = (index != null && index < queue.value.length)
+        ? queue.value[index].id
+        : null;
+    final isFav = currentId != null && _favorites.contains(currentId);
+
+    playbackState.add(
+      playbackState.value.copyWith(
+        controls: [
+          // Layout: [Prev] [Play/Pause] [Next] [Favorite]
+          a.MediaControl.skipToPrevious,
+          if (playing) a.MediaControl.pause else a.MediaControl.play,
+          a.MediaControl.skipToNext,
+          if (currentId != null) (isFav ? _unfavoriteAction : _favoriteAction),
+        ],
+        // Indices para la vista compacta (notificación colapsada)
+        // Mostramos: Prev, Play/Pause, Next
+        androidCompactActionIndices: const [0, 1, 2],
+        systemActions: {
+          a.MediaAction.seek, // Habilita la barra de búsqueda (seeking)
+          a.MediaAction.seekForward,
+          a.MediaAction.seekBackward,
+        },
+        processingState: processingState,
+        playing: playing,
+        speed: _player.speed,
+        updatePosition: _player.position,
+        bufferedPosition: _player.bufferedPosition,
+      ),
+    );
+  }
+
+  @override
+  Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
+    debugPrint('AudioService customAction: $name');
+    if (name == 'favorite' || name == 'unfavorite') {
+      final index = _player.currentIndex;
+      if (index != null && index < queue.value.length) {
+        final id = queue.value[index].id;
+        if (onFavoriteToggled != null) {
+          await onFavoriteToggled!(id);
+        }
+      }
+    }
+    super.customAction(name, extras);
   }
 
   void _listenForDurationChanges() {
@@ -183,6 +239,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
     _player.currentIndexStream.listen((index) {
       if (index == null || index < 0 || index >= queue.value.length) return;
       mediaItem.add(queue.value[index]);
+      _broadcastState(); // Update favorites state when song changes
     });
   }
 
@@ -391,6 +448,12 @@ class AudioService {
   Future<void> previous() => _internalHandler.skipToPrevious();
   Future<void> stop() => _internalHandler.stop();
   Future<void> dispose() => _internalHandler.dispose();
+
+  void updateFavorites(Set<String> favs) =>
+      _internalHandler.updateFavorites(favs);
+  void setFavoriteCallback(Future<void> Function(String) callback) {
+    _internalHandler.onFavoriteToggled = callback;
+  }
 }
 
 /// Wrapper para inicialización con configuración de notificación.

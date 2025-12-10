@@ -15,9 +15,9 @@ class _WelcomeViewState extends State<WelcomeView> {
   // Secuencia de textos
   final List<String> _texts = [
     'Hola',
-    'Preparando tu música...',
-    'Organizando biblioteca...',
-    'Todo casi listo...',
+    'Preparando tu música',
+    'Organizando biblioteca',
+    'Todo casi listo',
     'Bienvenido a Primek Music',
   ];
 

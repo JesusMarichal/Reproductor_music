@@ -8,6 +8,7 @@ import '../widgets/player_bar.dart';
 import '../controllers/playlist_controller.dart';
 import '../controllers/home_controller.dart';
 import '../models/playlist.dart';
+import '../models/song.dart';
 import '../widgets/now_playing_indicator.dart';
 
 class PlaylistsView extends StatefulWidget {
@@ -1097,288 +1098,11 @@ class _PlaylistsViewState extends State<PlaylistsView> {
   }
 
   void _openAddSongsDialog(BuildContext context, Playlist playlist) {
-    final home = context.read<HomeController>();
-    final pc = context.read<PlaylistController>();
-    // Copiamos la lista para no afectar la original mientras filtramos
-    final allSongs = home.songs;
-    // Set de IDs seleccionados (inicia con los que ya tiene la playlist)
-    final selected = playlist.songIds.toSet();
-    final searchCtrl = TextEditingController();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) {
-          final q = searchCtrl.text.trim().toLowerCase();
-          final filtered = q.isEmpty
-              ? allSongs
-              : allSongs.where((s) {
-                  return s.title.toLowerCase().contains(q) ||
-                      (s.artist ?? '').toLowerCase().contains(q);
-                }).toList();
-
-          return DraggableScrollableSheet(
-            initialChildSize: 0.85,
-            minChildSize: 0.5,
-            maxChildSize: 0.95,
-            builder: (_, scrollController) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 12, bottom: 8),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    // Header con título y botón guardar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Agregar canciones',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                '${selected.length} seleccionadas',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              await pc.updatePlaylist(
-                                id: playlist.id,
-                                songIds: selected.toList(),
-                              );
-                              if (!mounted) return;
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Playlist "${playlist.title}" actualizada',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                              // Refresh viewed playlist if needed
-                              // _showPlaylistSongs(context, ... ) logic handled by parent refresh usually
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onPrimary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Guardar'),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Buscador
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: TextField(
-                        controller: searchCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar canciones...',
-                          prefixIcon: const Icon(Icons.search),
-                          filled: true,
-                          fillColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceVariant.withOpacity(0.5),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 0,
-                          ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-
-                    const Divider(),
-
-                    // Lista de canciones
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.search_off,
-                                    size: 48,
-                                    color: Colors.grey.withOpacity(0.5),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'No se encontraron canciones',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              controller: scrollController,
-                              itemCount: filtered.length,
-                              padding: const EdgeInsets.only(bottom: 24),
-                              itemBuilder: (context, index) {
-                                final s = filtered[index];
-                                final isSelected = selected.contains(s.id);
-                                return ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 4,
-                                  ),
-                                  leading: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: QueryArtworkWidget(
-                                          id: int.tryParse(s.id) ?? 0,
-                                          type: ArtworkType.AUDIO,
-                                          size: 50,
-                                          nullArtworkWidget: Container(
-                                            width: 50,
-                                            height: 50,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.surfaceVariant,
-                                            child: const Icon(
-                                              Icons.music_note,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        Positioned.fill(
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                                  .withOpacity(0.6),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.check,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  title: Text(
-                                    s.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: isSelected
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : null,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    s.artist ?? 'Desconocido',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: Checkbox(
-                                    value: isSelected,
-                                    activeColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        if (v == true) {
-                                          selected.add(s.id);
-                                        } else {
-                                          selected.remove(s.id);
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  onTap: () {
-                                    setState(() {
-                                      if (isSelected) {
-                                        selected.remove(s.id);
-                                      } else {
-                                        selected.add(s.id);
-                                      }
-                                    });
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
+      builder: (ctx) => _AddSongsSheet(playlist: playlist),
     );
   }
 
@@ -1450,6 +1174,346 @@ class _PlaylistsViewState extends State<PlaylistsView> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AddSongsSheet extends StatefulWidget {
+  final Playlist playlist;
+  const _AddSongsSheet({required this.playlist});
+
+  @override
+  State<_AddSongsSheet> createState() => _AddSongsSheetState();
+}
+
+class _AddSongsSheetState extends State<_AddSongsSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  List<Song> _allSongs = [];
+  List<Song> _filteredSongs = [];
+  List<Song> _displayedSongs = [];
+  Set<String> _selected = {};
+
+  static const int _batchSize = 50;
+
+  @override
+  void initState() {
+    super.initState();
+    final home = context.read<HomeController>();
+    _allSongs = home.songs;
+    _filteredSongs = List.from(_allSongs);
+    _loadMore(initial: true);
+    _selected = widget.playlist.songIds.toSet();
+
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      if (q.isEmpty) {
+        _filteredSongs = List.from(_allSongs);
+      } else {
+        _filteredSongs = _allSongs
+            .where(
+              (s) =>
+                  s.title.toLowerCase().contains(q) ||
+                  (s.artist ?? '').toLowerCase().contains(q),
+            )
+            .toList();
+      }
+      _displayedSongs.clear();
+      _loadMore(initial: true);
+    });
+  }
+
+  void _loadMore({bool initial = false}) {
+    if (_displayedSongs.length >= _filteredSongs.length) return;
+
+    final int remaining = _filteredSongs.length - _displayedSongs.length;
+    final int take = remaining > _batchSize ? _batchSize : remaining;
+    final int currentLen = _displayedSongs.length;
+
+    final nextBatch = _filteredSongs.getRange(currentLen, currentLen + take);
+
+    if (initial) {
+      _displayedSongs = nextBatch.toList();
+    } else {
+      _displayedSongs.addAll(nextBatch);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pc = context.read<PlaylistController>();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, scrollController) {
+        return NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification scrollInfo) {
+            if (scrollInfo.metrics.pixels >=
+                scrollInfo.metrics.maxScrollExtent - 500) {
+              _loadMore();
+              setState(() {});
+            }
+            return false;
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Agregar canciones',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '${_selected.length} seleccionadas',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          await pc.updatePlaylist(
+                            id: widget.playlist.id,
+                            songIds: _selected.toList(),
+                          );
+                          if (!mounted) return;
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Playlist "${widget.playlist.title}" actualizada',
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Guardar'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar canciones...',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 0,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Divider(),
+
+                Expanded(
+                  child: _displayedSongs.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 48,
+                                color: Colors.grey.withOpacity(0.5),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No se encontraron canciones',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          itemCount: _displayedSongs.length,
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemExtent: 72.0,
+                          itemBuilder: (context, index) {
+                            final s = _displayedSongs[index];
+                            final isSelected = _selected.contains(s.id);
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              leading: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: QueryArtworkWidget(
+                                      id: int.tryParse(s.id) ?? 0,
+                                      type: ArtworkType.AUDIO,
+                                      keepOldArtwork: true,
+                                      quality: 50,
+                                      format: ArtworkFormat.JPEG,
+                                      size: 100,
+                                      nullArtworkWidget: Container(
+                                        width: 50,
+                                        height: 50,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceVariant,
+                                        child: const Icon(
+                                          Icons.music_note,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withOpacity(0.6),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.check,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              title: Text(
+                                s.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                              ),
+                              subtitle: Text(
+                                s.artist ?? 'Desconocido',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Checkbox(
+                                value: isSelected,
+                                activeColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selected.add(s.id);
+                                    } else {
+                                      _selected.remove(s.id);
+                                    }
+                                  });
+                                },
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selected.remove(s.id);
+                                  } else {
+                                    _selected.add(s.id);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
