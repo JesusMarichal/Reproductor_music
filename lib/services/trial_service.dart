@@ -6,7 +6,7 @@ class TrialService {
   static const _unlimitedKey = 'trial_unlimited_v1';
   static const _activatedKey = 'trial_activated_v1';
   // Duración de la fase de prueba en producción: 2 días.
-  static const Duration trialDuration = Duration(days: 2);
+  static const Duration trialDuration = Duration(days: 7);
 
   Future<DateTime> _now() async => DateTime.now();
 
@@ -71,5 +71,10 @@ class TrialService {
   Future<void> forceExpire() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_expiredKey, true);
+  }
+
+  Future<void> saveUserName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', name);
   }
 }

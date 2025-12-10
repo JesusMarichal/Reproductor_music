@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart' as a;
@@ -8,6 +11,7 @@ import 'base_controller.dart';
 import '../repositories/music_repository.dart';
 import '../repositories/favorites_repository.dart';
 import '../services/audio_service.dart';
+import '../services/metadata_service.dart';
 
 class HomeController extends BaseController {
   List<Song> songs = [];
@@ -26,6 +30,8 @@ class HomeController extends BaseController {
   final MusicRepository _repo = MusicRepository();
   final FavoritesRepository _favRepo = FavoritesRepository();
   Set<String> favorites = {};
+  Map<String, String> _renamedSongs =
+      {}; // Mapa para persistencia: ID -> Nuevo Título
   final AudioService audioService = AudioService();
   StreamSubscription<SequenceState?>? _currentIndexSub;
   StreamSubscription? _playerStateSub;
@@ -35,6 +41,24 @@ class HomeController extends BaseController {
     // user uses next/previous or the player advances automatically.
     _bindPlayer();
     _loadFavorites();
+    _loadRenamedSongs();
+  }
+
+  Future<void> _loadRenamedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? stored = prefs.getString('renamed_songs_map');
+    if (stored != null) {
+      try {
+        _renamedSongs = Map<String, String>.from(jsonDecode(stored));
+      } catch (e) {
+        debugPrint('Error cargando nombres renombrados: $e');
+      }
+    }
+  }
+
+  Future<void> _saveRenamedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('renamed_songs_map', jsonEncode(_renamedSongs));
   }
 
   Future<void> _loadFavorites() async {
@@ -95,11 +119,62 @@ class HomeController extends BaseController {
     // If we got songs, prepare the audio queue so playback is immediate and
     // seamless (avoids blocking later when starting playback).
     if (songs.isNotEmpty) {
+      // Aplicar renombrados guardados
+      if (_renamedSongs.isNotEmpty) {
+        for (int i = 0; i < songs.length; i++) {
+          if (_renamedSongs.containsKey(songs[i].id)) {
+            songs[i] = songs[i].copyWith(title: _renamedSongs[songs[i].id]);
+          }
+        }
+      }
       await audioService.setQueueFromSongs(songs);
     }
 
     isLoading = false;
     notifyListeners();
+
+    // Iniciar mejora de carátulas en segundo plano (Metadata - No AI)
+    _startArtworkEnhancement();
+  }
+
+  /// Tarea en segundo plano que usa MetadataService para buscar carátulas faltantes
+  Future<void> _startArtworkEnhancement() async {
+    // Evitamos re-procesar si ya tenemos imágenes
+    final missingArt = songs.where((s) => s.albumId == null).toList();
+    if (missingArt.isEmpty) return;
+
+    // Procesamos en lotes pequeños para no saturar
+    final metadataService = MetadataService();
+
+    for (final song in missingArt) {
+      if (!permissionGranted) break; // Detener si se revocan permisos
+
+      // Construimos término de búsqueda: "Artista - Título"
+      final query = '${song.artist ?? ""} ${song.title}'.trim();
+      if (query.isEmpty) continue;
+
+      final result = await metadataService.fetchMetadata(query);
+      if (result != null && result.artworkUrl != null) {
+        // Encontramos carátula HD!
+        // Nota: Idealmente guardaríamos esto en disco o base de datos local.
+        // Por ahora lo asignamos en memoria (se perderá al reiniciar app,
+        // pero sirve para demostrar la funcionalidad "en vivo").
+
+        // Como Song es immutable, reemplazamos en la lista
+        final index = songs.indexOf(song);
+        if (index != -1) {
+          songs[index] = song.copyWith(artworkUrl: result.artworkUrl);
+          // Notificar actualización visual
+          notifyListeners();
+
+          debugPrint(
+            'Metadata: Carátula encontrada para "${song.title}": ${result.artworkUrl}',
+          );
+        }
+      }
+      // Pequeña pausa para no floodear la API
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
   }
 
   Future<void> playAt(int index) async {
@@ -172,6 +247,26 @@ class HomeController extends BaseController {
 
   Future<void> previous() async {
     await audioService.previous();
+  }
+
+  /// Renombra una canción permanentemente (persistencia en app).
+  /// Útil para correcciones manuales
+  Future<void> renameSong(String id, String newTitle) async {
+    final index = songs.indexWhere((s) => s.id == id);
+    if (index != -1) {
+      // Guardar persistencia
+      _renamedSongs[id] = newTitle;
+      await _saveRenamedSongs();
+
+      // Guardar en memoria
+      songs[index] = songs[index].copyWith(title: newTitle);
+
+      // Si es la canción actual, actualizar referencia
+      if (currentSong?.id == id) {
+        currentSong = songs[index];
+      }
+      notifyListeners();
+    }
   }
 
   /// Configura la cola a partir de un subconjunto de canciones (playlist normal o mixta)

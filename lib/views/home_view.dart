@@ -149,25 +149,50 @@ class HomeViewState extends State<HomeView>
                     child: Row(
                       children: [
                         // Album Art
+                        // Album Art
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
-                          child: QueryArtworkWidget(
-                            id: intSongId,
-                            type: ArtworkType.AUDIO,
-                            artworkBorder: BorderRadius.zero,
-                            keepOldArtwork: true,
-                            nullArtworkWidget: Container(
-                              width: 48,
-                              height: 48,
-                              color: Colors.grey[850],
-                              child: const Icon(
-                                Icons.music_note,
-                                size: 24,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            size: 48,
-                          ),
+                          child: song.artworkUrl != null
+                              ? Image.network(
+                                  song.artworkUrl!,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      QueryArtworkWidget(
+                                        id: intSongId,
+                                        type: ArtworkType.AUDIO,
+                                        artworkBorder: BorderRadius.zero,
+                                        nullArtworkWidget: Container(
+                                          width: 48,
+                                          height: 48,
+                                          color: Colors.grey[850],
+                                          child: const Icon(
+                                            Icons.music_note,
+                                            size: 24,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        size: 48,
+                                      ),
+                                )
+                              : QueryArtworkWidget(
+                                  id: intSongId,
+                                  type: ArtworkType.AUDIO,
+                                  artworkBorder: BorderRadius.zero,
+                                  keepOldArtwork: true,
+                                  nullArtworkWidget: Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: Colors.grey[850],
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      size: 24,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  size: 48,
+                                ),
                         ),
                         const SizedBox(width: 12),
                         // Title & Artist

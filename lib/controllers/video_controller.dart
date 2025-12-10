@@ -127,7 +127,8 @@ class VideoController extends ChangeNotifier {
           await audio.pause();
         }
       } catch (_) {}
-      // Registrar acceso global la primera vez o actualizar referencia
+
+      // Register access
       VideoControllerAccess.register(
         VideoControllerAccess(
           pauseIfPlaying: () {
@@ -137,25 +138,29 @@ class VideoController extends ChangeNotifier {
           },
         ),
       );
-      ytController.load(id);
-      try {
-        debugPrint('VideoController: ytController.load called for $id');
-      } catch (_) {}
-      if (autoPlay) {
-        // give a microtask so load commits
-        scheduleMicrotask(() {
-          try {
-            debugPrint('VideoController: scheduling play for $id');
-          } catch (_) {}
-          try {
-            ytController.play();
-            debugPrint('VideoController: play() invoked for $id');
-          } catch (e) {
-            debugPrint('VideoController: play() error for $id -> $e');
-          }
-        });
-      }
+
+      // RECREATE CONTROLLER: This is critical to avoid "Invalid Parameter Value"
+      // because the widget might be built fresh and needs the correct initialVideoId.
+      final old = ytController;
+      ytController = YoutubePlayerController(
+        initialVideoId: id,
+        flags: YoutubePlayerFlags(
+          autoPlay: autoPlay,
+          mute: false,
+          enableCaption: _lastCaptionsEnabled,
+        ),
+      )..addListener(_onPlayerChanged);
+
+      _isReady = false; // Reset ready state
       notifyListeners();
+
+      // Dispose old controller
+      scheduleMicrotask(() {
+        try {
+          old.removeListener(_onPlayerChanged);
+          old.dispose();
+        } catch (_) {}
+      });
     } catch (e) {
       if (kDebugMode) {
         // ignore: avoid_print

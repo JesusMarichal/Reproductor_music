@@ -55,6 +55,7 @@ dependencies:
   path_provider: ^2.1.5
   image_picker: ^1.2.1
   wakelock_plus: ^1.4.0
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:

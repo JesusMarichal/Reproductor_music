@@ -335,4 +335,8 @@ class ThemeController extends ChangeNotifier {
       await prefs.setString('theme_key', key);
     }
   }
+
+  Color getThemeColor(String key) {
+    return _themes[key]?.colorScheme.primary ?? Colors.blue;
+  }
 }

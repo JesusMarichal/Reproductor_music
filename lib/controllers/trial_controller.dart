@@ -33,9 +33,10 @@ class TrialController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<ActivationResult> submitCode(String code) async {
+  Future<ActivationResult> submitCode(String code, String name) async {
     if (code == '654321') {
       await _service.activateUnlimited();
+      if (name.isNotEmpty) await _service.saveUserName(name);
       activated = true;
       unlimited = true;
       expired = false;
@@ -46,6 +47,7 @@ class TrialController extends ChangeNotifier {
     }
     if (code == '000000') {
       await _service.activateLimitedNow();
+      if (name.isNotEmpty) await _service.saveUserName(name);
       activated = true;
       unlimited = false;
       expired = false;
