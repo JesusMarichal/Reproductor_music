@@ -860,19 +860,17 @@ class _PlaylistsViewState extends State<PlaylistsView> {
                             // Shuffle Button
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   final home = context.read<HomeController>();
-                                  home.playSubset(
-                                    songs,
-                                    0, // Will be shuffled anyway usually or just start first then shuffle
-                                    // Better logic might be needed for true shuffle start, but playSubset handles standard playback.
-                                    // We can just play and toggle shuffle, or if playSubset supports it.
-                                    // For now, let's just play.
+                                  final shuffled = List<Song>.from(songs)
+                                    ..shuffle();
+                                  await home.playSubset(
+                                    shuffled,
+                                    0,
                                     mixed: p.isMixed,
                                     mixedId: p.isMixed ? p.id : null,
                                     mixedTitle: p.isMixed ? p.title : null,
                                   );
-                                  home.toggleShuffle(); // Toggle shuffle on
                                 },
                                 icon: const Icon(Icons.shuffle_rounded),
                                 label: const Text('Aleatorio'),
@@ -1188,22 +1186,30 @@ class _AddSongsSheet extends StatefulWidget {
 
 class _AddSongsSheetState extends State<_AddSongsSheet> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _internalScroll = ScrollController();
 
+  // Use simple lists, maybe avoid keeping full copies if we can reference
   List<Song> _allSongs = [];
   List<Song> _filteredSongs = [];
   List<Song> _displayedSongs = [];
   Set<String> _selected = {};
 
   static const int _batchSize = 50;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final home = context.read<HomeController>();
-    _allSongs = home.songs;
-    _filteredSongs = List.from(_allSongs);
-    _loadMore(initial: true);
     _selected = widget.playlist.songIds.toSet();
+
+    // Load songs in next frame to not block animation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final home = context.read<HomeController>();
+      _allSongs = home.songs;
+      _filteredSongs = List.from(_allSongs);
+      _loadMore(initial: true);
+      if (mounted) setState(() => _isLoading = false);
+    });
 
     _searchCtrl.addListener(_onSearch);
   }
@@ -1211,11 +1217,17 @@ class _AddSongsSheetState extends State<_AddSongsSheet> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _internalScroll.dispose();
     super.dispose();
   }
 
   void _onSearch() {
     final q = _searchCtrl.text.trim().toLowerCase();
+
+    // Simple throttling could be added here if needed, but setState is cheap if list is small.
+    // However, filtering is the expensive part.
+    // For now we do it directly but reset displayed items.
+
     setState(() {
       if (q.isEmpty) {
         _filteredSongs = List.from(_allSongs);
@@ -1252,213 +1264,151 @@ class _AddSongsSheetState extends State<_AddSongsSheet> {
   @override
   Widget build(BuildContext context) {
     final pc = context.read<PlaylistController>();
+    final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.85,
+      initialChildSize: 0.9,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (_, scrollController) {
-        return NotificationListener<ScrollNotification>(
-          onNotification: (ScrollNotification scrollInfo) {
-            if (scrollInfo.metrics.pixels >=
-                scrollInfo.metrics.maxScrollExtent - 500) {
-              _loadMore();
-              setState(() {});
-            }
-            return false;
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 20,
-                  spreadRadius: 5,
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // 1. Header with Drag Handle & Actions
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Center(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
                     ),
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Agregar canciones',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '${_selected.length} seleccionadas',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                          ),
-                        ],
+                    Text(
+                      'Agregar canciones',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          await pc.updatePlaylist(
-                            id: widget.playlist.id,
-                            songIds: _selected.toList(),
-                          );
-                          if (!mounted) return;
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Playlist "${widget.playlist.title}" actualizada',
-                              ),
-                              behavior: SnackBarBehavior.floating,
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await pc.updatePlaylist(
+                          id: widget.playlist.id,
+                          songIds: _selected.toList(),
+                        );
+                        if (!mounted) return;
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Guardado'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
-                        child: const Text('Guardar'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar canciones...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceVariant.withOpacity(0.5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 0,
+                        );
+                      },
+                      child: Text(
+                        'Guardar (${_selected.length})',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
+                  ],
+                ),
+              ),
+
+              // 2. Search Bar (floating-ish look)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 0,
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar...',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceVariant.withOpacity(
+                      0.3,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
 
-                const Divider(),
-
-                Expanded(
-                  child: _displayedSongs.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.search_off,
-                                size: 48,
-                                color: Colors.grey.withOpacity(0.5),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'No se encontraron canciones',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
+              // 3. List
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _displayedSongs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.music_off,
+                              size: 64,
+                              color: Colors.grey.withOpacity(0.3),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No se encontraron canciones',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      )
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (ScrollNotification scrollInfo) {
+                          if (scrollInfo.metrics.pixels >=
+                              scrollInfo.metrics.maxScrollExtent - 500) {
+                            _loadMore();
+                            setState(() {});
+                          }
+                          return false;
+                        },
+                        child: ListView.builder(
                           controller: scrollController,
                           itemCount: _displayedSongs.length,
-                          padding: const EdgeInsets.only(bottom: 24),
-                          itemExtent: 72.0,
+                          itemExtent: 72,
                           itemBuilder: (context, index) {
                             final s = _displayedSongs[index];
                             final isSelected = _selected.contains(s.id);
+
                             return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 4,
-                              ),
-                              leading: Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: QueryArtworkWidget(
-                                      id: int.tryParse(s.id) ?? 0,
-                                      type: ArtworkType.AUDIO,
-                                      keepOldArtwork: true,
-                                      quality: 50,
-                                      format: ArtworkFormat.JPEG,
-                                      size: 100,
-                                      nullArtworkWidget: Container(
-                                        width: 50,
-                                        height: 50,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.surfaceVariant,
-                                        child: const Icon(
-                                          Icons.music_note,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: QueryArtworkWidget(
+                                  id: int.tryParse(s.id) ?? 0,
+                                  type: ArtworkType.AUDIO,
+                                  keepOldArtwork: true,
+                                  quality:
+                                      20, // Lower quality for list thumbnails
+                                  size: 100,
+                                  format: ArtworkFormat.JPEG,
+                                  nullArtworkWidget: Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: theme.colorScheme.surfaceVariant,
+                                    child: Icon(
+                                      Icons.music_note,
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                  if (isSelected)
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withOpacity(0.6),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Center(
-                                          child: Icon(
-                                            Icons.check,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                                ),
                               ),
                               title: Text(
                                 s.title,
@@ -1466,10 +1416,10 @@ class _AddSongsSheetState extends State<_AddSongsSheet> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontWeight: isSelected
-                                      ? FontWeight.bold
+                                      ? FontWeight.w600
                                       : FontWeight.normal,
                                   color: isSelected
-                                      ? Theme.of(context).colorScheme.primary
+                                      ? theme.colorScheme.primary
                                       : null,
                                 ),
                               ),
@@ -1478,39 +1428,29 @@ class _AddSongsSheetState extends State<_AddSongsSheet> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              trailing: Checkbox(
-                                value: isSelected,
-                                activeColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                onChanged: (v) {
-                                  setState(() {
-                                    if (v == true) {
-                                      _selected.add(s.id);
-                                    } else {
-                                      _selected.remove(s.id);
-                                    }
-                                  });
-                                },
-                              ),
+                              trailing: isSelected
+                                  ? Icon(
+                                      Icons.check_circle,
+                                      color: theme.colorScheme.primary,
+                                    )
+                                  : Icon(
+                                      Icons.circle_outlined,
+                                      color: Colors.grey,
+                                    ),
                               onTap: () {
                                 setState(() {
-                                  if (isSelected) {
+                                  if (isSelected)
                                     _selected.remove(s.id);
-                                  } else {
+                                  else
                                     _selected.add(s.id);
-                                  }
                                 });
                               },
                             );
                           },
                         ),
-                ),
-              ],
-            ),
+                      ),
+              ),
+            ],
           ),
         );
       },

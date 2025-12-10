@@ -66,7 +66,7 @@ class PlansView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Elige tu plan y accede a audio de alta definición y temas exclusivos en tu TV y Móvil.',
+                  'Elige tu plan y accede a audio de alta definición y temas exclusivos sin límites.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
