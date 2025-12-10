@@ -73,6 +73,15 @@
 -keep class com.ryanheise.audioservice.** { *; }
 -dontwarn com.ryanheise.audioservice.**
 
+# just_audio (plugin logic)
+-keep class com.ryanheise.just_audio.** { *; }
+-dontwarn com.ryanheise.just_audio.**
+
+# audio_session
+-keep class com.ryanheise.audio_session.** { *; }
+-dontwarn com.ryanheise.audio_session.**
+
+
 # just_audio / ExoPlayer integration
 -keep class com.google.android.exoplayer2.** { *; }
 -dontwarn com.google.android.exoplayer2.**
