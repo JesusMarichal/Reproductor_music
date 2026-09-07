@@ -85,8 +85,8 @@ class _NowPlayingIndicatorState extends State<NowPlayingIndicator>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _buildBar(h1, activeColor),
-              _buildBar(h2, activeColor.withOpacity(0.85)),
-              _buildBar(h3, activeColor.withOpacity(0.7)),
+              _buildBar(h2, activeColor.withValues(alpha: 0.85)),
+              _buildBar(h3, activeColor.withValues(alpha: 0.7)),
             ],
           );
         },

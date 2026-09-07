@@ -192,11 +192,6 @@ class HomeController extends BaseController {
     // Si se reproduce directamente desde la vista general, limpiar indicador mixto
     currentMixedPlaylistId = null;
     currentMixedPlaylistTitle = null;
-    // Pausar video si está activo para liberar foco y evitar conflicto de audio.
-    try {
-      final vc = VideoControllerAccess.instanceOrNull();
-      if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-    } catch (_) {}
     // Configurar cola completa de canciones y reproducir desde índice dado.
     try {
       await audioService.setQueueFromSongs(songs);
@@ -288,10 +283,6 @@ class HomeController extends BaseController {
   }) async {
     if (subset.isEmpty || startIndex < 0 || startIndex >= subset.length) return;
     try {
-      final vc = VideoControllerAccess.instanceOrNull();
-      if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-    } catch (_) {}
-    try {
       await audioService.setQueueFromSongs(subset);
       await audioService.playIndex(startIndex);
     } catch (_) {
@@ -319,15 +310,3 @@ class HomeController extends BaseController {
   }
 }
 
-/// Acceso estático al VideoController sin acoplar provider directamente aquí.
-/// Permite pausar video desde controladores que no tienen BuildContext.
-class VideoControllerAccess {
-  static VideoControllerAccess? _instance;
-  final void Function()? pauseIfPlaying;
-  VideoControllerAccess({this.pauseIfPlaying});
-  static void register(VideoControllerAccess access) {
-    _instance = access;
-  }
-
-  static VideoControllerAccess? instanceOrNull() => _instance;
-}

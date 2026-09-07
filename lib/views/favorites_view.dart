@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../controllers/home_controller.dart';
-import '../widgets/player_bar.dart';
-import 'player_view.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/now_playing_indicator.dart';
 
 // ... (in build method)
@@ -49,15 +48,10 @@ class _FavoritesViewState extends State<FavoritesView>
         .toList();
 
     if (favoriteSongs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.favorite_border, size: 72, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('No hay favoritos', style: TextStyle(fontSize: 18)),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.favorite_border_rounded,
+        title: 'Todavía no tienes favoritos',
+        message: 'Marca una canción con el corazón y aparecerá aquí.',
       );
     }
 
@@ -74,7 +68,7 @@ class _FavoritesViewState extends State<FavoritesView>
                   gradient: LinearGradient(
                     colors: [
                       Theme.of(context).primaryColor,
-                      Theme.of(context).primaryColor.withOpacity(0.9),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.9),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(14),
@@ -140,18 +134,15 @@ class _FavoritesViewState extends State<FavoritesView>
                       icon: const Icon(Icons.play_arrow),
                       label: const Text('Reproducir'),
                       onPressed: () async {
+                        // El messenger se captura antes del await: después,
+                        // el context podría estar desmontado.
+                        final messenger = ScaffoldMessenger.of(context);
                         try {
-                          // Pausar video si está activo
-                          try {
-                            final vc = VideoControllerAccess.instanceOrNull();
-                            if (vc?.pauseIfPlaying != null)
-                              vc!.pauseIfPlaying!();
-                          } catch (_) {}
                           await controller.audioService.setQueueFromSongs(
                             favoriteSongs,
                           );
                           await controller.audioService.playIndex(0);
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             SnackBar(
                               content: Text(
                                 'Reproduciendo ${favoriteSongs.length} favoritos',
@@ -159,7 +150,7 @@ class _FavoritesViewState extends State<FavoritesView>
                             ),
                           );
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(
                               content: Text('Error al reproducir favoritos'),
                             ),
@@ -186,14 +177,8 @@ class _FavoritesViewState extends State<FavoritesView>
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     onTap: () async {
-                      try {
-                        final vc = VideoControllerAccess.instanceOrNull();
-                        if (vc?.pauseIfPlaying != null) vc!.pauseIfPlaying!();
-                      } catch (_) {}
-
                       // Play logic
                       final isSame = controller.currentSong?.id == song.id;
-                      final isPlaying = controller.audioService.player.playing;
 
                       // If already playing this song, just toggle (and don't open player)
                       if (isSame) {
@@ -215,8 +200,9 @@ class _FavoritesViewState extends State<FavoritesView>
                         // PlayerView auto-open removed per user request
                       } catch (e) {
                         // fallback
-                        if (song.uri != null)
+                        if (song.uri != null) {
                           await controller.audioService.playUri(song.uri!);
+                        }
                       }
                     },
                     child: SizedBox(
@@ -239,7 +225,7 @@ class _FavoritesViewState extends State<FavoritesView>
                                   height: 56,
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.primary.withOpacity(0.12),
+                                  ).colorScheme.primary.withValues(alpha: 0.12),
                                   child: const Icon(
                                     Icons.music_note,
                                     size: 28,
@@ -371,8 +357,8 @@ class _FavoritesViewState extends State<FavoritesView>
                                         center: const Alignment(-0.2, -0.1),
                                         radius: radius,
                                         colors: [
-                                          base.withOpacity(innerAlpha),
-                                          base.withOpacity(0.0),
+                                          base.withValues(alpha: innerAlpha),
+                                          base.withValues(alpha: 0.0),
                                         ],
                                         stops: const [0.0, 1.0],
                                       ),
@@ -395,16 +381,10 @@ class _FavoritesViewState extends State<FavoritesView>
                 }
 
                 return decorated;
-              }).toList(),
+              }),
             ],
           ),
         ),
-
-        // Player bar fijo al fondo si hay una canción seleccionada
-        if (controller.currentIndex != -1) ...[
-          const SizedBox(height: 8),
-          const PlayerBar(),
-        ],
       ],
     );
   }

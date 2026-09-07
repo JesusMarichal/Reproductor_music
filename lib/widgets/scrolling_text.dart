@@ -81,8 +81,9 @@ class _ScrollingTextState extends State<ScrollingText>
   Future<void> _runAnimationLoop() async {
     while (mounted) {
       if (!_scrollController.hasClients ||
-          _scrollController.position.maxScrollExtent <= 0)
+          _scrollController.position.maxScrollExtent <= 0) {
         break;
+      }
 
       // Pause at start
       await Future.delayed(widget.pauseDuration);

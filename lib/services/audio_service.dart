@@ -36,6 +36,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
   );
   String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
   bool _playingBeforeInterruption = false;
+  bool _resettingAfterQueueEnd = false;
 
   // Callbacks y estado para favoritos
   Future<void> Function(String)? onFavoriteToggled;
@@ -101,8 +102,6 @@ class _MyAudioHandler extends a.BaseAudioHandler
                 pause();
               }
               break;
-            default:
-              break;
           }
         } else {
           switch (event.type) {
@@ -113,8 +112,6 @@ class _MyAudioHandler extends a.BaseAudioHandler
                 play();
                 _playingBeforeInterruption = false;
               }
-              break;
-            default:
               break;
           }
         }
@@ -148,6 +145,16 @@ class _MyAudioHandler extends a.BaseAudioHandler
         } else {
           WakelockPlus.disable();
         }
+
+        // Al acabar la última pista, just_audio deja `playing == true` y la
+        // posición clavada al final: la interfaz se queda como si la canción
+        // estuviese terminando indefinidamente. Rebobinamos al principio de
+        // la cola y en pausa, que es el estado en reposo esperado.
+        if (state.processingState == ProcessingState.completed &&
+            _player.loopMode == LoopMode.off) {
+          _resetAfterQueueEnd();
+        }
+
         // Force update UI for play/pause state changes if not covered by playbackEventStream
         _broadcastState();
       },
@@ -155,6 +162,30 @@ class _MyAudioHandler extends a.BaseAudioHandler
         debugPrint('playerStateStream error: $e');
       },
     );
+  }
+
+  /// Deja el reproductor listo para volver a empezar tras terminar la cola.
+  ///
+  /// Se protege con una bandera porque el propio `seek` vuelve a emitir
+  /// estados y volveríamos a entrar aquí.
+  Future<void> _resetAfterQueueEnd() async {
+    if (_resettingAfterQueueEnd) return;
+    _resettingAfterQueueEnd = true;
+    try {
+      await _player.pause();
+      // Con una cola de varias pistas volvemos a la primera; con una sola
+      // fuente basta con rebobinar.
+      if (_player.sequence.isNotEmpty) {
+        await _player.seek(Duration.zero, index: 0);
+      } else {
+        await _player.seek(Duration.zero);
+      }
+    } catch (e) {
+      debugPrint('No se pudo reiniciar la cola al terminar: $e');
+    } finally {
+      _resettingAfterQueueEnd = false;
+      _broadcastState();
+    }
   }
 
   void _broadcastState() {

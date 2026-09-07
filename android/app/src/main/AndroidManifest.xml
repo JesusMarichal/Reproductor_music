@@ -14,7 +14,7 @@
     <!-- Para SDK 34+ especificar tipo de foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <application
-        android:label="Primek Music"
+        android:label="Kiss Music"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">

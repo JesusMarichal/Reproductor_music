@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/playlist_controller.dart';
+import '../models/song.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/music_loader.dart';
+import '../widgets/song_artwork.dart';
+import 'home_view.dart' show formatDuration;
 
+/// Búsqueda dentro de la biblioteca, con selección múltiple para añadir
+/// varias canciones a una lista de una vez.
+///
+/// Es una pestaña del contenedor principal: no define barra superior propia
+/// ni cierra la pantalla al reproducir.
 class SearchView extends StatefulWidget {
   const SearchView({super.key});
 
@@ -13,317 +23,326 @@ class SearchView extends StatefulWidget {
 }
 
 class _SearchViewState extends State<SearchView> {
-  final TextEditingController _queryCtrl = TextEditingController();
+  final TextEditingController _queryController = TextEditingController();
+  final Set<String> _selected = {};
   String _query = '';
-  final Set<String> _selected = {}; // para selección múltiple
 
   @override
   void dispose() {
-    _queryCtrl.dispose();
+    _queryController.dispose();
     super.dispose();
+  }
+
+  List<Song> _filter(List<Song> songs) {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) return songs;
+    return songs.where((s) {
+      return s.title.toLowerCase().contains(query) ||
+          (s.artist ?? '').toLowerCase().contains(query) ||
+          (s.album ?? '').toLowerCase().contains(query);
+    }).toList();
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final home = context.watch<HomeController>();
-    final pc = context.read<PlaylistController>();
+    final colors = context.colors;
 
     if (home.isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Buscar')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: MusicLoader());
     }
 
-    final songs = home.songs;
-    final filtered = _query.isEmpty
-        ? songs
-        : songs.where((s) {
-            final q = _query.toLowerCase();
-            return (s.title.toLowerCase().contains(q) ||
-                (s.artist ?? '').toLowerCase().contains(q) ||
-                (s.album ?? '').toLowerCase().contains(q));
-          }).toList();
+    final results = _filter(home.songs);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Buscar música'),
-        actions: [
-          if (_selected.isNotEmpty)
-            IconButton(
-              tooltip: 'Agregar a lista',
-              icon: const Icon(Icons.playlist_add),
-              onPressed: () =>
-                  _showAddToPlaylist(context, pc, _selected.toList()),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              controller: _queryCtrl,
-              decoration: InputDecoration(
-                hintText: 'Buscar por título, artista o álbum',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _queryCtrl.clear();
-                          setState(() => _query = '');
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.md,
           ),
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: filtered.length,
-              itemBuilder: (context, i) {
-                final s = filtered[i];
-                final originalIndex = songs.indexWhere((x) => x.id == s.id);
-                final isSelected = _selected.contains(s.id);
-                return ListTile(
-                  leading: QueryArtworkWidget(
-                    id: int.tryParse(s.id) ?? 0,
-                    type: ArtworkType.AUDIO,
-                    artworkBorder: BorderRadius.circular(6),
-                    nullArtworkWidget: Builder(
-                      builder: (ctx) {
-                        final base = Theme.of(ctx).colorScheme.primary;
-                        // Evita el uso de withOpacity() (deprecado) y usa withAlpha
-                        final bg = base.withAlpha((0.12 * 255).round());
-                        return Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: bg,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(
-                            Icons.music_note,
-                            color: Colors.grey,
-                          ),
-                        );
+          child: TextField(
+            controller: _queryController,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Título, artista o álbum',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Limpiar',
+                      onPressed: () {
+                        _queryController.clear();
+                        setState(() => _query = '');
                       },
                     ),
-                    size: 48,
+            ),
+            onChanged: (value) => setState(() => _query = value),
+          ),
+        ),
+        // Barra contextual de selección: sustituye a la acción que antes
+        // vivía en la barra superior, que esta vista ya no controla.
+        if (_selected.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: colors.primary.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _selected.length == 1
+                          ? '1 seleccionada'
+                          : '${_selected.length} seleccionadas',
+                      style: context.texts.titleSmall,
+                    ),
                   ),
-                  title: Text(
-                    s.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  TextButton(
+                    onPressed: () => setState(_selected.clear),
+                    child: const Text('Quitar'),
                   ),
-                  subtitle: Text(
-                    '${s.artist ?? 'Desconocido'} • ${s.album ?? ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.play_arrow),
-                        tooltip: 'Reproducir',
-                        onPressed: () async {
-                          if (originalIndex != -1) {
-                            // Capturamos el Navigator antes del await para no usar
-                            // BuildContext a través de la brecha async.
-                            final nav = Navigator.of(context);
-                            await home.playAt(originalIndex);
-                            if (!mounted) return;
-                            nav.pop(); // volver al home o lo que sea
-                          } else {
-                            final messenger = ScaffoldMessenger.of(context);
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'No se pudo reproducir esta pista',
-                                ),
-                              ),
-                            );
-                          }
-                        },
+                  const SizedBox(width: AppSpacing.xs),
+                  FilledButton.icon(
+                    onPressed: () => _addToPlaylist(_selected.toList()),
+                    icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                    label: const Text('Añadir'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.playlist_add),
-                        tooltip: 'Agregar a una lista',
-                        onPressed: () =>
-                            _showAddToPlaylist(context, pc, [s.id]),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          isSelected
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
-                        ),
-                        tooltip: 'Seleccionar',
-                        onPressed: () {
-                          setState(() {
-                            if (isSelected)
-                              _selected.remove(s.id);
-                            else
-                              _selected.add(s.id);
-                          });
-                        },
-                      ),
-                    ],
+                    ),
                   ),
-                  onLongPress: () {
-                    setState(() {
-                      if (isSelected)
-                        _selected.remove(s.id);
-                      else
-                        _selected.add(s.id);
-                    });
-                  },
-                  onTap: () async {
-                    // Abrir detalles o reproducir
-                    if (originalIndex != -1) {
-                      final nav = Navigator.of(context);
-                      await home.playAt(originalIndex);
-                      if (!mounted) return;
-                      nav.pop();
-                    }
-                  },
-                );
-              },
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        Expanded(
+          child: results.isEmpty
+              ? AppEmptyState(
+                  icon: _query.isEmpty
+                      ? Icons.search_rounded
+                      : Icons.search_off_rounded,
+                  title: _query.isEmpty
+                      ? 'Busca en tu biblioteca'
+                      : 'Sin resultados',
+                  message: _query.isEmpty
+                      ? 'Escribe el título de una canción, un artista o un '
+                          'álbum.'
+                      : 'No hay ninguna canción que coincida con «$_query».',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  itemCount: results.length,
+                  itemBuilder: (context, i) {
+                    final song = results[i];
+                    return _ResultTile(
+                      song: song,
+                      selected: _selected.contains(song.id),
+                      onToggleSelection: () => _toggleSelection(song.id),
+                      onPlay: () {
+                        final index =
+                            home.songs.indexWhere((s) => s.id == song.id);
+                        if (index != -1) home.playAt(index);
+                      },
+                      onAddToPlaylist: () => _addToPlaylist([song.id]),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
-  Future<void> _showAddToPlaylist(
-    BuildContext context,
-    PlaylistController pc,
-    List<String> songIds,
-  ) async {
-    // Ensure playlists are loaded
-    await pc.init();
+  Future<void> _addToPlaylist(List<String> songIds) async {
+    final playlistController = context.read<PlaylistController>();
+    await playlistController.init();
     if (!mounted) return;
 
-    final localCtx =
-        context; // capturado después de await y comprobación de mounted
-    showModalBottomSheet(
-      context: localCtx,
-      builder: (ctx) {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        final playlists = playlistController.playlists;
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Agregar a lista',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.md,
                 ),
-                const SizedBox(height: 8),
-                if (pc.playlists.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: Text('No hay listas. Crea una nueva.'),
+                child: Text(
+                  songIds.length == 1
+                      ? 'Añadir a una lista'
+                      : 'Añadir ${songIds.length} canciones',
+                  style: sheetContext.texts.titleMedium,
+                ),
+              ),
+              if (playlists.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
                   ),
-                ...pc.playlists.map((pl) {
-                  return ListTile(
-                    title: Text(pl.title),
-                    subtitle: Text('${pl.songIds.length} canciones'),
-                    onTap: () async {
-                      // Capturamos el ScaffoldMessenger antes de la llamada async
-                      final messenger = ScaffoldMessenger.of(localCtx);
-                      Navigator.of(ctx).pop();
-                      await pc.addSongsToPlaylist(pl.id, songIds);
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Agregado a "${pl.title}"')),
-                      );
-                    },
-                  );
-                }),
-                const Divider(),
+                  child: Text(
+                    'Todavía no hay listas. Crea una desde la pestaña Listas.',
+                    style: sheetContext.texts.bodyMedium?.copyWith(
+                      color: sheetContext.colors.textSecondary,
+                    ),
+                  ),
+                ),
+              for (final playlist in playlists)
                 ListTile(
-                  leading: const Icon(Icons.create_new_folder),
-                  title: const Text('Crear nueva lista'),
+                  leading: const Icon(Icons.queue_music_rounded),
+                  title: Text(playlist.title),
+                  subtitle: Text('${playlist.songIds.length} canciones'),
                   onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _showCreatePlaylistDialog(localCtx, pc, songIds);
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.of(sheetContext).pop();
+                    await playlistController.addSongsToPlaylist(
+                      playlist.id,
+                      songIds,
+                    );
+                    if (!mounted) return;
+                    setState(_selected.clear);
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Añadido a «${playlist.title}»')),
+                    );
                   },
                 ),
-              ],
-            ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
           ),
         );
       },
     );
   }
+}
 
-  Future<void> _showCreatePlaylistDialog(
-    BuildContext context,
-    PlaylistController pc,
-    List<String> songIds,
-  ) async {
-    final nameCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Crear lista'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Nombre requerido' : null,
-              ),
-              TextFormField(
-                controller: descCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Descripción (opcional)',
+class _ResultTile extends StatelessWidget {
+  const _ResultTile({
+    required this.song,
+    required this.selected,
+    required this.onToggleSelection,
+    required this.onPlay,
+    required this.onAddToPlaylist,
+  });
+
+  final Song song;
+  final bool selected;
+  final VoidCallback onToggleSelection;
+  final VoidCallback onPlay;
+  final VoidCallback onAddToPlaylist;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      child: Material(
+        color: selected ? colors.primary.withValues(alpha: 0.12) : null,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: onPlay,
+          onLongPress: onToggleSelection,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                SongArtwork(song: song, size: 48),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        song.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.texts.titleSmall,
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        [
+                          song.artist?.trim().isNotEmpty == true
+                              ? song.artist!.trim()
+                              : 'Artista desconocido',
+                          if (song.album?.trim().isNotEmpty == true)
+                            song.album!.trim(),
+                          if (formatDuration(song.duration).isNotEmpty)
+                            formatDuration(song.duration),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.texts.bodySmall
+                            ?.copyWith(color: colors.textTertiary),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.playlist_add_rounded),
+                  iconSize: 20,
+                  tooltip: 'Añadir a una lista',
+                  color: colors.textTertiary,
+                  onPressed: onAddToPlaylist,
+                ),
+                IconButton(
+                  icon: Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                  ),
+                  iconSize: 20,
+                  tooltip: selected ? 'Quitar de la selección' : 'Seleccionar',
+                  color: selected ? colors.primary : colors.textTertiary,
+                  onPressed: onToggleSelection,
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final title = nameCtrl.text.trim();
-              final desc = descCtrl.text.trim();
-              Navigator.of(ctx).pop();
-              // Usar el contexto del diálogo (ctx) en lugar del contexto externo
-              // para evitar usar un BuildContext capturado a través de awaits.
-              final messenger = ScaffoldMessenger.of(ctx);
-              await pc.createPlaylist(title, desc, songIds);
-              if (!mounted) return;
-              messenger.showSnackBar(
-                SnackBar(content: Text('Lista "$title" creada')),
-              );
-            },
-            child: const Text('Crear'),
-          ),
-        ],
       ),
     );
-    nameCtrl.dispose();
-    descCtrl.dispose();
   }
 }
