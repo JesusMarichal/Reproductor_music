@@ -1,100 +1,62 @@
-# ProGuard rules for Flutter app
-# Keep Flutter engine and plugin registration
+# Reglas de R8 para la app.
+#
+# Sólo se conservan las de librerías que la app usa hoy. Las de YouTube
+# Player, WebView, okhttp, libVLC y ExoPlayer2 se eliminaron junto con el
+# módulo de vídeo: mantener -keep de clases inexistentes no da error, pero
+# oculta qué se está protegiendo de verdad.
+
+# --- Flutter ---
 -keep class io.flutter.app.** { *; }
 -keep class io.flutter.plugin.** { *; }
 -keep class io.flutter.embedding.** { *; }
+# Los plugins se registran por código generado, pero algunos resuelven
+# handlers por reflexión desde el canal de plataforma.
+-keep class io.flutter.plugins.** { *; }
+-keep class io.flutter.embedding.engine.plugins.** { *; }
 
-# Keep model classes used via reflection or serialization (adjust as needed)
-#-keep class com.example.reproductor_music.models.** { *; }
-
-# If using Gson/other reflection-based JSON libs, keep model fields or add rules per library.
-
-# Keep entry points for native callbacks
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
-# Keep native method names (if using platform channels with named methods)
+# Métodos nativos: el nombre no puede cambiar o falla el enlace JNI.
 -keepclasseswithmembernames class * {
     native <methods>;
 }
 
-# Add additional -keep rules for any library that requires them (check runtime crashes / docs)
+# --- Reproducción de audio ---
+# just_audio y audio_service instancian clases por nombre; sin estos keep,
+# R8 las elimina y la reproducción falla en release.
+-keep class com.ryanheise.audioservice.** { *; }
+-dontwarn com.ryanheise.audioservice.**
+-keep class com.ryanheise.just_audio.** { *; }
+-dontwarn com.ryanheise.just_audio.**
+-keep class com.ryanheise.audio_session.** { *; }
+-dontwarn com.ryanheise.audio_session.**
 
-# --- YouTube Player / WebView related (prevent stripping) ---
--keep class com.pierfrancescosoffritti.androidyoutubeplayer.** { *; }
--keep interface com.pierfrancescosoffritti.androidyoutubeplayer.** { *; }
+# Media3 es el motor de reproducción que usa just_audio.
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+-keep class com.google.common.util.concurrent.ListenableFuture
 
-# Flutter YouTube player plugin (reflection via MethodChannel)
--keep class io.flutter.plugins.** { *; }
+# --- on_audio_query ---
+# El plugin guarda el MethodCall/Result pendientes en WeakReference dentro de
+# su PluginProvider. Si R8 optimiza estas clases, el Result queda accesible
+# antes de tiempo, el recolector se lo lleva mientras el diálogo de permisos
+# está abierto y al volver la app revienta con
+# "Tried to get one of the methods but the 'PluginProvider' has not
+# initialized". Conservarlas intactas evita esa carrera.
+-keep class com.lucasjosino.on_audio_query.** { *; }
+-keepclassmembers class com.lucasjosino.on_audio_query.** { *; }
+-dontwarn com.lucasjosino.on_audio_query.**
 
-# WebView JS interfaces (already kept), ensure android.webkit classes not shrunk excessively
--keep class android.webkit.** { *; }
+# --- Play Core ---
+# Flutter referencia estas clases para componentes diferidos, que esta app no
+# usa. Sin los -dontwarn, R8 falla al no encontrarlas.
+-dontwarn com.google.android.play.core.**
 
-# youtube_explode_dart uses HTTP parsing; keep okhttp/gson if transitively present
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
--dontwarn okhttp3.**
-
-# If using Kotlin coroutines keep debug metadata to avoid crashes in async stack mapping
+# --- Kotlin ---
 -keepclassmembers class kotlin.coroutines.** { *; }
 -dontwarn kotlin.coroutines.**
 
-# Remove logging from release
+# Quitar el log de depuración del binario de release.
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);
 }
-
-# Rules automatically generated to suppress R8 warnings for Play Core classes
-# (added to fix missing classes detected during R8 when building release).
-
--dontwarn com.google.android.play.core.tasks.Task
-
-# R8 sugerido: suprimir advertencias sobre Play Core (SplitCompat / SplitInstall)
--dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
--dontwarn com.google.android.play.core.splitinstall.SplitInstallException
--dontwarn com.google.android.play.core.splitinstall.SplitInstallManager
--dontwarn com.google.android.play.core.splitinstall.SplitInstallManagerFactory
--dontwarn com.google.android.play.core.splitinstall.SplitInstallRequest$Builder
--dontwarn com.google.android.play.core.splitinstall.SplitInstallRequest
--dontwarn com.google.android.play.core.splitinstall.SplitInstallSessionState
--dontwarn com.google.android.play.core.splitinstall.SplitInstallStateUpdatedListener
--dontwarn com.google.android.play.core.tasks.OnFailureListener
--dontwarn com.google.android.play.core.tasks.OnSuccessListener
-
-# Keep audio playback libraries and native bindings used by plugins to
-# prevent R8 from stripping them in release builds. These keeps help
-# avoid crashes related to missing ExoPlayer/libVLC/native classes.
-# Adjust if you know specific packages to keep for your plugin versions.
-
-# audio_service (service classes and helpers)
--keep class com.ryanheise.audioservice.** { *; }
--dontwarn com.ryanheise.audioservice.**
-
-# just_audio (plugin logic)
--keep class com.ryanheise.just_audio.** { *; }
--dontwarn com.ryanheise.just_audio.**
-
-# audio_session
--keep class com.ryanheise.audio_session.** { *; }
--dontwarn com.ryanheise.audio_session.**
-
-
-# just_audio / ExoPlayer integration
--keep class com.google.android.exoplayer2.** { *; }
--dontwarn com.google.android.exoplayer2.**
-
-# libVLC (used by flutter_vlc_player)
--keep class org.videolan.libvlc.** { *; }
--dontwarn org.videolan.libvlc.**
-
-# Media3 (Newer just_audio versions)
--keep class androidx.media3.** { *; }
--dontwarn androidx.media3.**
--keep class com.google.common.util.concurrent.ListenableFuture
-
-# Keep Flutter plugin registration classes and common plugin namespaces
--keep class io.flutter.plugins.** { *; }
--keep class io.flutter.embedding.engine.plugins.** { *; }

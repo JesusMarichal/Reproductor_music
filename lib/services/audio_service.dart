@@ -9,6 +9,7 @@ import 'package:audio_service/audio_service.dart' as a;
 import 'package:audio_session/audio_session.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
+import 'notification_artwork.dart';
 
 /// Handler que integra JustAudio con audio_service para exponer estado a
 /// notificaciones del sistema (Android) y controles externos.
@@ -37,6 +38,13 @@ class _MyAudioHandler extends a.BaseAudioHandler
   String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
   bool _playingBeforeInterruption = false;
   bool _resettingAfterQueueEnd = false;
+
+  /// La cola de audio se identifica por URI, pero la carátula incrustada se
+  /// consulta por id de MediaStore: hace falta el puente entre ambos.
+  final Map<String, String> _songIdByUri = {};
+
+  /// Carátula remota (iTunes) ya conocida, por URI de la pista.
+  final Map<String, String> _remoteArtByUri = {};
 
   // Callbacks y estado para favoritos
   Future<void> Function(String)? onFavoriteToggled;
@@ -269,9 +277,37 @@ class _MyAudioHandler extends a.BaseAudioHandler
   void _listenForCurrentSongChanges() {
     _player.currentIndexStream.listen((index) {
       if (index == null || index < 0 || index >= queue.value.length) return;
-      mediaItem.add(queue.value[index]);
+      final item = queue.value[index];
+      mediaItem.add(item);
       _broadcastState(); // Update favorites state when song changes
+      _attachArtwork(index, item);
     });
+  }
+
+  /// Resuelve la carátula de la pista en curso a un fichero que Android pueda
+  /// abrir y la publica en la notificación.
+  ///
+  /// Se hace aquí, y no al montar la cola, para no leer la carátula de cada
+  /// canción de la biblioteca: sólo interesa la que se está escuchando.
+  Future<void> _attachArtwork(int index, a.MediaItem item) async {
+    final songId = _songIdByUri[item.id];
+    if (songId == null) return;
+
+    final uri = await NotificationArtwork.instance.resolve(
+      songId,
+      remoteArtworkUrl: _remoteArtByUri[item.id],
+    );
+    if (uri == null || uri == item.artUri) return;
+
+    // La pista puede haber cambiado mientras se resolvía.
+    if (_player.currentIndex != index) return;
+    if (index >= queue.value.length || queue.value[index].id != item.id) return;
+
+    final updated = item.copyWith(artUri: uri);
+    final newQueue = [...queue.value];
+    newQueue[index] = updated;
+    queue.add(newQueue);
+    mediaItem.add(updated);
   }
 
   // ---- Métodos de control ----
@@ -353,21 +389,26 @@ class _MyAudioHandler extends a.BaseAudioHandler
         queue.value.length == playable.length) {
       return;
     }
+    _songIdByUri.clear();
+    _remoteArtByUri.clear();
+    for (final s in playable) {
+      _songIdByUri[s.uri!] = s.id;
+      final art = s.artworkUrl;
+      if (art != null && art.isNotEmpty) _remoteArtByUri[s.uri!] = art;
+    }
+
     final items = <a.MediaItem>[
       for (final s in playable)
         a.MediaItem(
           id: s.uri!,
           title: s.title,
-          artist: s.artist ?? 'Desconocido',
+          // Mismo texto que muestra la app: MediaStore devuelve '<unknown>',
+          // que ya se normaliza a null en el repositorio.
+          artist: s.artist ?? 'Artista desconocido',
           album: s.album,
-          // Se habilita artUri para mostrar la carátula del álbum en la notificación,
-          // lo que le da el aspecto "bello" y completo (estilo Spotify/YouTube).
-          // Android automáticamente usa esto como fondo/icono grande.
-          artUri: s.albumId != null
-              ? Uri.parse(
-                  'content://media/external/audio/albumart/${s.albumId}',
-                )
-              : null,
+          // La carátula no se pone aquí: la URI de MediaStore falla cuando el
+          // archivo no lleva imagen incrustada. La resuelve `_attachArtwork`
+          // para la pista en curso, con respaldo al logo de la app.
           duration: s.duration != null
               ? Duration(milliseconds: s.duration!)
               : null,
@@ -495,8 +536,8 @@ class AudioServiceInit {
     return a.AudioService.init(
       builder: builder,
       config: const a.AudioServiceConfig(
-        androidNotificationChannelId: 'com.primek.music.playback',
-        androidNotificationChannelName: 'Reproducción de música',
+        androidNotificationChannelId: 'com.kissmusic.playback',
+        androidNotificationChannelName: 'Kiss Music',
         // Permitir que la notificación sea cerrable desde la UI del sistema.
         // Antes estaba en `true` (notificación "ongoing"), lo que impedía
         // que el usuario la descartara manualmente. Al ponerlo en `false`,

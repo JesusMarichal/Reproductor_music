@@ -53,6 +53,11 @@ class MetadataService {
           String? art = item['artworkUrl100'];
           if (art != null) {
             art = art.replaceAll('100x100bb', '500x500bb');
+            // La app no permite tráfico en claro: forzamos https por si la
+            // API devolviera alguna URL sin cifrar.
+            if (art.startsWith('http://')) {
+              art = art.replaceFirst('http://', 'https://');
+            }
           }
 
           return MetadataResult(

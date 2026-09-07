@@ -55,12 +55,23 @@ class MusicRepository {
             id: s.id.toString(),
             title: s.title,
             uri: s.uri,
-            artist: s.artist,
+            artist: _clean(s.artist),
             duration: s.duration,
-            album: s.album ?? '',
+            album: _clean(s.album) ?? '',
             albumId: s.albumId,
           ),
         )
         .toList();
+  }
+
+  /// MediaStore rellena artista y álbum con el literal `<unknown>` cuando el
+  /// archivo no trae la etiqueta. Se convierte a null en el único punto por
+  /// donde entran estos datos, para que ninguna vista tenga que conocer ese
+  /// detalle ni acabe pintándolo en pantalla.
+  static String? _clean(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.toLowerCase() == '<unknown>') return null;
+    return trimmed;
   }
 }
