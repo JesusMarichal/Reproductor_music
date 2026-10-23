@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 import '../models/song.dart';
+import '../services/artwork_cache.dart';
 import '../theme/app_theme.dart';
 
 /// Carátula de una canción, con la misma cascada de respaldo en toda la app:
@@ -83,4 +84,42 @@ class _ArtworkPlaceholder extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Lo que se pinta mientras la carátula "vuela" entre el mini reproductor y
+/// el reproductor a pantalla completa.
+///
+/// Sin esto, Flutter reconstruye el hijo del Hero de destino dentro de la
+/// animación: al cerrar, el `QueryArtworkWidget` del mini reproductor vuelve a
+/// consultar la carátula de forma asíncrona (se ve el marcador y luego la
+/// imagen) y al abrir se estiraba una miniatura de 44 px. Aquí se usan siempre
+/// los mismos bytes en caché y sólo se interpola el radio de las esquinas.
+HeroFlightShuttleBuilder artworkFlightShuttle(Song song) {
+  return (flightContext, animation, direction, fromContext, toContext) {
+    final bytes = ArtworkCache.instance.peek(song);
+    // `animation` es la de la ruta del reproductor: 0 = cerrado, 1 = abierto,
+    // tanto al abrir como al cerrar.
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) => ClipRRect(
+        borderRadius: BorderRadius.circular(
+          AppRadius.sm + (AppRadius.xl - AppRadius.sm) * animation.value,
+        ),
+        child: child,
+      ),
+      child: bytes != null
+          // Mismo `MemoryImage` (mismos bytes, sin `cacheWidth`) que usa el
+          // reproductor: se decodifica una vez y se comparte.
+          ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
+          : _heroChild(
+              direction == HeroFlightDirection.push ? toContext : fromContext,
+            ),
+    );
+  };
+}
+
+/// Hijo del Hero del reproductor, como respaldo cuando no hay carátula.
+Widget _heroChild(BuildContext heroContext) {
+  final widget = heroContext.widget;
+  return widget is Hero ? widget.child : const SizedBox.shrink();
 }

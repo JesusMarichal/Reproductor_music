@@ -138,6 +138,7 @@ class _FavoritesViewState extends State<FavoritesView>
                         // el context podría estar desmontado.
                         final messenger = ScaffoldMessenger.of(context);
                         try {
+                          controller.queueTitle = 'Música que te gustó';
                           await controller.audioService.setQueueFromSongs(
                             favoriteSongs,
                           );
@@ -193,6 +194,7 @@ class _FavoritesViewState extends State<FavoritesView>
                       if (startIndex == -1) return;
 
                       try {
+                        controller.queueTitle = 'Música que te gustó';
                         await controller.audioService.setQueueFromSongs(
                           favoriteSongs,
                         );

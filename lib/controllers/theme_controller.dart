@@ -10,7 +10,7 @@ import '../theme/app_theme.dart';
 /// igual de completos.
 class ThemeController extends ChangeNotifier {
   ThemeController({String? initialKey})
-      : _palette = AppPalettes.byKey(initialKey);
+    : _palette = AppPalettes.byKey(initialKey);
 
   AppPalette _palette;
 

@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/home_controller.dart';
+import '../models/song.dart';
+import '../services/artwork_cache.dart';
 import '../theme/app_theme.dart';
 import '../views/player_view.dart';
 import 'scrolling_text.dart';
@@ -49,7 +52,11 @@ class MiniPlayer extends StatelessWidget {
                         children: [
                           Hero(
                             tag: 'artwork-${song.id}',
-                            child: SongArtwork(song: song, size: 44),
+                            flightShuttleBuilder: artworkFlightShuttle(song),
+                            child: _CurrentArtwork(
+                              key: ValueKey(ArtworkCache.keyOf(song)),
+                              song: song,
+                            ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -68,8 +75,9 @@ class MiniPlayer extends StatelessWidget {
                                       : 'Artista desconocido',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: context.texts.bodySmall
-                                      ?.copyWith(color: colors.textTertiary),
+                                  style: context.texts.bodySmall?.copyWith(
+                                    color: colors.textTertiary,
+                                  ),
                                 ),
                               ],
                             ),
@@ -86,13 +94,74 @@ class MiniPlayer extends StatelessWidget {
     );
   }
 
-  void _openPlayer(BuildContext context) {
+  Future<void> _openPlayer(BuildContext context) async {
     final home = context.read<HomeController>();
     if (PlayerView.isOpen || home.playerViewOpen) return;
     home.playerViewOpen = true;
-    Navigator.of(context).push(buildPlayerRoute()).then((_) {
+    final navigator = Navigator.of(context);
+
+    // Deja la carátula decodificada antes de empezar la transición: si se
+    // decodifica durante la animación, los primeros frames se pierden.
+    final song = home.currentSong;
+    if (song != null) {
+      try {
+        final bytes = await ArtworkCache.instance
+            .load(song)
+            .timeout(const Duration(milliseconds: 250));
+        if (bytes != null && context.mounted) {
+          await precacheImage(
+            MemoryImage(bytes),
+            context,
+          ).timeout(const Duration(milliseconds: 250));
+        }
+      } catch (_) {
+        // Si tarda, se abre igualmente: la carátula llegará después.
+      }
+    }
+
+    navigator.push(buildPlayerRoute()).then((_) {
       home.playerViewOpen = false;
     });
+  }
+}
+
+/// Carátula de la pista en curso.
+///
+/// Usa los mismos bytes en caché que el reproductor a pantalla completa: así
+/// el Hero vuela entre dos imágenes idénticas y, al cambiar de pista, la
+/// carátula se actualiza (el `QueryArtworkWidget` con `keepOldArtwork` se
+/// quedaba con la de la canción anterior o con el marcador vacío).
+class _CurrentArtwork extends StatelessWidget {
+  const _CurrentArtwork({super.key, required this.song});
+
+  final Song song;
+
+  static const double _size = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    final cache = ArtworkCache.instance;
+    // Ya resuelta (lo normal: HomeController la precarga al cambiar de
+    // pista): se pinta sin pasar por un FutureBuilder.
+    if (cache.contains(song)) return _image(cache.peek(song));
+    return FutureBuilder<Uint8List?>(
+      future: cache.load(song),
+      builder: (context, snapshot) => _image(snapshot.data),
+    );
+  }
+
+  Widget _image(Uint8List? bytes) {
+    if (bytes == null) return SongArtwork(song: song, size: _size);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Image.memory(
+        bytes,
+        width: _size,
+        height: _size,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      ),
+    );
   }
 }
 
@@ -143,7 +212,8 @@ class _Controls extends StatelessWidget {
       builder: (context, snapshot) {
         final state = snapshot.data;
         final playing = state?.playing ?? false;
-        final waiting = state?.processingState == ProcessingState.loading ||
+        final waiting =
+            state?.processingState == ProcessingState.loading ||
             state?.processingState == ProcessingState.buffering;
 
         return Row(
@@ -177,8 +247,9 @@ class _Controls extends StatelessWidget {
                       tooltip: playing ? 'Pausar' : 'Reproducir',
                       style: IconButton.styleFrom(
                         backgroundColor: colors.primary,
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
                       ),
                       onPressed: () =>
                           context.read<HomeController>().togglePlayPause(),

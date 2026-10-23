@@ -117,11 +117,9 @@ class _PlaylistHeader extends StatelessWidget {
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
           final top = constraints.biggest.height;
-          final minHeight =
-              MediaQuery.paddingOf(context).top + kToolbarHeight;
+          final minHeight = MediaQuery.paddingOf(context).top + kToolbarHeight;
           // 0 = totalmente desplegada, 1 = colapsada.
-          final t = ((_expandedHeight - top) /
-                  (_expandedHeight - minHeight))
+          final t = ((_expandedHeight - top) / (_expandedHeight - minHeight))
               .clamp(0.0, 1.0);
 
           return FlexibleSpaceBar(
@@ -198,8 +196,9 @@ class _PlaylistHeader extends StatelessWidget {
                                     ? '1 canción'
                                     : '$songCount canciones',
                               ].join(' · '),
-                              style: context.texts.bodySmall
-                                  ?.copyWith(color: colors.textTertiary),
+                              style: context.texts.bodySmall?.copyWith(
+                                color: colors.textTertiary,
+                              ),
                             ),
                           ],
                         ),
@@ -244,8 +243,9 @@ class _ActionBar extends StatelessWidget {
                 playlist.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: context.texts.bodySmall
-                    ?.copyWith(color: colors.textSecondary),
+                style: context.texts.bodySmall?.copyWith(
+                  color: colors.textSecondary,
+                ),
               ),
             )
           else
@@ -264,9 +264,7 @@ class _ActionBar extends StatelessWidget {
             onPressed: enabled ? () => _play(context, shuffle: true) : null,
           ),
           const SizedBox(width: AppSpacing.xs),
-          _PlayButton(
-            onPressed: enabled ? () => _play(context) : null,
-          ),
+          _PlayButton(onPressed: enabled ? () => _play(context) : null),
         ],
       ),
     );
@@ -281,6 +279,7 @@ class _ActionBar extends StatelessWidget {
       mixed: playlist.isMixed,
       mixedId: playlist.isMixed ? playlist.id : null,
       mixedTitle: playlist.isMixed ? playlist.title : null,
+      title: playlist.title,
     );
   }
 }
@@ -370,9 +369,7 @@ class _PlaylistMenu extends StatelessWidget {
                 ),
                 title: Text(
                   'Eliminar lista',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
                 onTap: () async {
                   Navigator.pop(sheetContext);
@@ -426,12 +423,13 @@ class _TrackTile extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
           onTap: () => context.read<HomeController>().playSubset(
-                songs,
-                index,
-                mixed: playlist.isMixed,
-                mixedId: playlist.isMixed ? playlist.id : null,
-                mixedTitle: playlist.isMixed ? playlist.title : null,
-              ),
+            songs,
+            index,
+            mixed: playlist.isMixed,
+            mixedId: playlist.isMixed ? playlist.id : null,
+            mixedTitle: playlist.isMixed ? playlist.title : null,
+            title: playlist.title,
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
@@ -451,8 +449,9 @@ class _TrackTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: context.texts.titleSmall?.copyWith(
-                          color:
-                              isCurrent ? colors.primary : colors.textPrimary,
+                          color: isCurrent
+                              ? colors.primary
+                              : colors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
@@ -462,8 +461,9 @@ class _TrackTile extends StatelessWidget {
                             : 'Artista desconocido',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: context.texts.bodySmall
-                            ?.copyWith(color: colors.textTertiary),
+                        style: context.texts.bodySmall?.copyWith(
+                          color: colors.textTertiary,
+                        ),
                       ),
                     ],
                   ),
@@ -483,8 +483,9 @@ class _TrackTile extends StatelessWidget {
                           )
                         : Text(
                             formatDuration(song.duration),
-                            style: context.texts.bodySmall
-                                ?.copyWith(color: colors.textTertiary),
+                            style: context.texts.bodySmall?.copyWith(
+                              color: colors.textTertiary,
+                            ),
                           ),
                   ),
                 ),

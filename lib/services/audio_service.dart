@@ -36,6 +36,11 @@ class _MyAudioHandler extends a.BaseAudioHandler
     ),
   );
   String? _lastQueueSignature; // Para evitar reconstituir la cola idéntica.
+
+  /// Se incrementa en cada `setQueueFromSongs`: sólo la llamada más reciente
+  /// puede dar por buena la cola o limpiarla si falla. Una llamada anterior
+  /// que se interrumpe no debe vaciar la cola que montó la siguiente.
+  int _queueGeneration = 0;
   bool _playingBeforeInterruption = false;
   bool _resettingAfterQueueEnd = false;
 
@@ -213,11 +218,9 @@ class _MyAudioHandler extends a.BaseAudioHandler
       }
     }();
 
-    // Determinar ícono de favorito
-    final index = _player.currentIndex;
-    final currentId = (index != null && index < queue.value.length)
-        ? queue.value[index].id
-        : null;
+    // Determinar ícono de favorito. El id del MediaItem es la URI del
+    // archivo; los favoritos se guardan por id de canción.
+    final currentId = _currentSongId();
     final isFav = currentId != null && _favorites.contains(currentId);
 
     playbackState.add(
@@ -246,16 +249,21 @@ class _MyAudioHandler extends a.BaseAudioHandler
     );
   }
 
+  /// Id de canción (el mismo con el que se guardan los favoritos) de la pista
+  /// en curso, o null si no se conoce.
+  String? _currentSongId() {
+    final index = _player.currentIndex;
+    if (index == null || index < 0 || index >= queue.value.length) return null;
+    return _songIdByUri[queue.value[index].id];
+  }
+
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     debugPrint('AudioService customAction: $name');
     if (name == 'favorite' || name == 'unfavorite') {
-      final index = _player.currentIndex;
-      if (index != null && index < queue.value.length) {
-        final id = queue.value[index].id;
-        if (onFavoriteToggled != null) {
-          await onFavoriteToggled!(id);
-        }
+      final id = _currentSongId();
+      if (id != null && onFavoriteToggled != null) {
+        await onFavoriteToggled!(id);
       }
     }
     super.customAction(name, extras);
@@ -389,6 +397,7 @@ class _MyAudioHandler extends a.BaseAudioHandler
         queue.value.length == playable.length) {
       return;
     }
+    final generation = ++_queueGeneration;
     _songIdByUri.clear();
     _remoteArtByUri.clear();
     for (final s in playable) {
@@ -432,8 +441,10 @@ class _MyAudioHandler extends a.BaseAudioHandler
       await _player.setAudioSource(playlist, preload: true);
       // Preparar en background para que el primer play sea inmediato.
       await _player.load();
-      _lastQueueSignature = signature;
+      if (generation == _queueGeneration) _lastQueueSignature = signature;
     } catch (e) {
+      // Interrumpida por una cola más nueva: no es un error real.
+      if (generation != _queueGeneration) return;
       debugPrint(
         'AudioHandler.setQueueFromSongs: failed to set audio source: $e',
       );
@@ -452,6 +463,29 @@ class _MyAudioHandler extends a.BaseAudioHandler
       await _player.play();
     } catch (e) {
       debugPrint('AudioHandler.playIndex error: $e');
+    }
+  }
+
+  /// Mueve una pista dentro de la cola, en el reproductor y en la cola que
+  /// publica la notificación, para que ambas sigan alineadas por índice.
+  Future<void> moveQueueItem(int from, int to) async {
+    final items = [...queue.value];
+    if (from == to ||
+        from < 0 ||
+        to < 0 ||
+        from >= items.length ||
+        to >= items.length) {
+      return;
+    }
+    items.insert(to, items.removeAt(from));
+    queue.add(items);
+    // La cola ya no coincide con la lista original: si se vuelve a pedir,
+    // se reconstruye.
+    _lastQueueSignature = null;
+    try {
+      await _player.moveAudioSource(from, to);
+    } catch (e) {
+      debugPrint('AudioHandler.moveQueueItem error: $e');
     }
   }
 
@@ -512,6 +546,8 @@ class AudioService {
   Future<void> setQueueFromSongs(List<Song> songs) =>
       _internalHandler.setQueueFromSongs(songs);
   Future<void> playIndex(int index) => _internalHandler.playIndex(index);
+  Future<void> moveQueueItem(int from, int to) =>
+      _internalHandler.moveQueueItem(from, to);
   Future<void> playUri(String uri) => _internalHandler.playUri(uri);
   Future<void> pause() => _internalHandler.pause();
   Future<void> play() => _internalHandler.play();

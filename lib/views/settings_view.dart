@@ -3,88 +3,253 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/home_controller.dart';
+import '../controllers/profile_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/about_dialog.dart';
+import '../widgets/profile_avatar.dart';
 
-/// Ajustes. Se abre desde el perfil, así que aporta su propia barra superior.
+/// Ajustes, al estilo de la pantalla "Cuenta" de YouTube Music: cabecera con
+/// el perfil y una lista plana de opciones con icono. Se abre desde el
+/// perfil, así que aporta su propia barra superior.
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajustes')),
-      body: _SettingsBody(),
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Cerrar',
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        titleSpacing: 0,
+        title: Text(
+          'Cuenta',
+          style: context.texts.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: const _SettingsBody(),
     );
   }
 }
 
 class _SettingsBody extends StatelessWidget {
+  const _SettingsBody();
+
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xxl,
-      ),
-      children: const [
-        _SectionTitle('Apariencia'),
-        _ThemeSection(),
-        SizedBox(height: AppSpacing.xl),
-        _SectionTitle('Biblioteca'),
-        _LibrarySection(),
-        SizedBox(height: AppSpacing.xl),
-        _SectionTitle('Explorar'),
-        _DiscoverySection(),
-        SizedBox(height: AppSpacing.xl),
-        _SectionTitle('Aplicación'),
-        _AboutSection(),
+    final home = context.read<HomeController>();
+    final colors = context.colors;
+
+    return CustomScrollView(
+      slivers: [
+        SliverList.list(
+          children: [
+            const _AccountHeader(),
+            Divider(height: 1, thickness: 1, color: colors.border),
+            const SizedBox(height: AppSpacing.sm),
+            _MenuItem(
+              icon: Icons.palette_outlined,
+              label: 'Apariencia',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const _AppearanceView(),
+                ),
+              ),
+            ),
+            _MenuItem(
+              icon: Icons.travel_explore_rounded,
+              label: 'Descubrir música',
+              onTap: () => Navigator.pushNamed(context, '/discovery'),
+            ),
+            _MenuItem(
+              icon: Icons.refresh_rounded,
+              label: 'Volver a leer la biblioteca',
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await home.loadSongs();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('${home.songs.length} canciones encontradas'),
+                  ),
+                );
+              },
+            ),
+            const _MenuItem(
+              icon: Icons.shield_outlined,
+              label: 'Permisos y notificaciones',
+              onTap: openAppSettings,
+            ),
+            _MenuItem(
+              icon: Icons.help_outline_rounded,
+              label: 'Acerca de Kiss Music',
+              onTap: () => showAboutAppDialog(context),
+            ),
+          ],
+        ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.xxl,
+                AppSpacing.lg,
+                AppSpacing.xl,
+              ),
+              child: Text(
+                'Kiss Music  •  Versión $kAppVersion',
+                style: context.texts.bodyMedium?.copyWith(
+                  color: colors.textTertiary,
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-
-  final String text;
+/// Avatar, nombre y resumen de la biblioteca; vuelve al perfil al tocarla.
+class _AccountHeader extends StatelessWidget {
+  const _AccountHeader();
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileController>();
+    final home = context.watch<HomeController>();
+    final colors = context.colors;
+    // El azul de enlace de YouTube, con su variante para fondos claros.
+    final link = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF3EA6FF)
+        : const Color(0xFF065FD4);
+    void openProfile() => Navigator.of(context).maybePop();
+
     return Padding(
-      padding: const EdgeInsets.only(
-        left: AppSpacing.xs,
-        bottom: AppSpacing.md,
-      ),
-      child: Text(
-        text.toUpperCase(),
-        style: context.texts.labelSmall
-            ?.copyWith(color: context.colors.textTertiary),
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: openProfile,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg + AppSpacing.xs,
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  const ProfileAvatar(size: 48),
+                  const SizedBox(width: AppSpacing.lg + AppSpacing.xs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.texts.titleMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          '${home.songs.length} canciones · '
+                          '${home.favorites.length} me gusta',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.texts.bodyMedium?.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: colors.textPrimary),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 88),
+            child: GestureDetector(
+              onTap: openProfile,
+              child: Text(
+                'Administra tu perfil',
+                style: context.texts.bodyMedium?.copyWith(color: link),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Tarjeta contenedora con el estilo de superficie del tema.
-class _Card extends StatelessWidget {
-  const _Card({required this.children});
+/// Fila de menú plana: icono de línea y texto, sin tarjeta ni subtítulo.
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
-  final List<Widget> children;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surface1,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: colors.border),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg + AppSpacing.xs,
+          vertical: AppSpacing.lg,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 26, color: context.colors.textPrimary),
+            const SizedBox(width: AppSpacing.xl),
+            Expanded(
+              child: Text(
+                label,
+                style: context.texts.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+    );
+  }
+}
+
+/// Subpágina con el selector de temas.
+class _AppearanceView extends StatelessWidget {
+  const _AppearanceView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Apariencia')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xxl,
+        ),
+        children: const [_ThemeSection()],
+      ),
     );
   }
 }
@@ -189,8 +354,10 @@ class _ThemeCard extends StatelessWidget {
               ),
               Text(
                 tones.isDark ? 'Oscuro' : 'Claro',
-                style: context.texts.bodySmall
-                    ?.copyWith(color: colors.textTertiary, fontSize: 11),
+                style: context.texts.bodySmall?.copyWith(
+                  color: colors.textTertiary,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -252,7 +419,10 @@ class _ThemePreview extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tones.accent,
                           shape: BoxShape.circle,
-                          border: Border.all(color: tones.background, width: 1.5),
+                          border: Border.all(
+                            color: tones.background,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -302,11 +472,7 @@ class _PreviewRow extends StatelessWidget {
 }
 
 class _Bar extends StatelessWidget {
-  const _Bar({
-    required this.color,
-    required this.width,
-    required this.height,
-  });
+  const _Bar({required this.color, required this.width, required this.height});
 
   final Color color;
   final double width;
@@ -321,82 +487,6 @@ class _Bar extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(height),
       ),
-    );
-  }
-}
-
-class _LibrarySection extends StatelessWidget {
-  const _LibrarySection();
-
-  @override
-  Widget build(BuildContext context) {
-    final home = context.watch<HomeController>();
-
-    return _Card(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.refresh_rounded),
-          title: const Text('Volver a leer la biblioteca'),
-          subtitle: Text(
-            home.songs.isEmpty
-                ? 'Sin canciones indexadas'
-                : '${home.songs.length} canciones indexadas',
-          ),
-          onTap: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            await home.loadSongs();
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('${home.songs.length} canciones encontradas'),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.shield_outlined),
-          title: const Text('Permisos y notificaciones'),
-          subtitle: const Text('Se gestionan desde los ajustes del sistema'),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-          onTap: openAppSettings,
-        ),
-      ],
-    );
-  }
-}
-
-class _DiscoverySection extends StatelessWidget {
-  const _DiscoverySection();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.travel_explore_rounded),
-          title: const Text('Descubrir música'),
-          subtitle: const Text('Buscar artistas y canciones en Spotify'),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => Navigator.pushNamed(context, '/discovery'),
-        ),
-      ],
-    );
-  }
-}
-
-class _AboutSection extends StatelessWidget {
-  const _AboutSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.info_outline_rounded),
-          title: const Text('Acerca de Kiss Music'),
-          subtitle: const Text('Versión $kAppVersion'),
-          onTap: () => showAboutAppDialog(context),
-        ),
-      ],
     );
   }
 }

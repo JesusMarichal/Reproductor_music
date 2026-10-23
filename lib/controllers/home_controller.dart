@@ -10,6 +10,7 @@ import '../models/song.dart';
 import 'base_controller.dart';
 import '../repositories/music_repository.dart';
 import '../repositories/favorites_repository.dart';
+import '../services/artwork_cache.dart';
 import '../services/audio_service.dart';
 import '../services/metadata_service.dart';
 
@@ -22,6 +23,10 @@ class HomeController extends BaseController {
   // Identificador de playlist mixta actualmente en reproducción (si aplica)
   String? currentMixedPlaylistId;
   String? currentMixedPlaylistTitle;
+
+  /// Origen de la cola en curso ("Todas las canciones", el nombre de la
+  /// lista...). Lo muestra el reproductor en "Reproduciendo desde".
+  String? queueTitle;
   // Flag para evitar abrir múltiples instancias de PlayerView
   bool playerViewOpen = false;
 
@@ -86,6 +91,9 @@ class HomeController extends BaseController {
           currentIndex =
               idx; // puede ser -1 si la cola no pertenece a "songs" completa
           currentSong = idx != -1 ? songs[idx] : null;
+          // Precarga la carátula grande: así el reproductor la tiene lista
+          // al abrirse y no aparece a mitad de la transición.
+          if (currentSong != null) ArtworkCache.instance.load(currentSong!);
           notifyListeners();
         }
       } catch (_) {
@@ -135,11 +143,20 @@ class HomeController extends BaseController {
           }
         }
       }
-      await audioService.setQueueFromSongs(songs);
     }
 
+    // La lista se muestra ya: preparar la cola carga la primera pista en el
+    // reproductor y puede tardar varios segundos, y antes se esperaba a que
+    // terminase para quitar el indicador de carga. Si el usuario toca una
+    // canción antes, `playAt` vuelve a montar la cola igualmente.
     isLoading = false;
     notifyListeners();
+
+    if (songs.isNotEmpty) {
+      audioService.setQueueFromSongs(songs).catchError((Object e) {
+        debugPrint('No se pudo preparar la cola: $e');
+      });
+    }
 
     // Iniciar mejora de carátulas en segundo plano (Metadata - No AI)
     _startArtworkEnhancement();
@@ -172,6 +189,12 @@ class HomeController extends BaseController {
         final index = songs.indexOf(song);
         if (index != -1) {
           songs[index] = song.copyWith(artworkUrl: result.artworkUrl);
+          // La pista en curso es otra instancia: sin esto el reproductor y la
+          // notificación seguirían con la carátula vieja.
+          if (currentSong?.id == song.id) {
+            currentSong = songs[index];
+            ArtworkCache.instance.load(currentSong!);
+          }
           // Notificar actualización visual
           notifyListeners();
 
@@ -192,6 +215,7 @@ class HomeController extends BaseController {
     // Si se reproduce directamente desde la vista general, limpiar indicador mixto
     currentMixedPlaylistId = null;
     currentMixedPlaylistTitle = null;
+    queueTitle = 'Todas las canciones';
     // Configurar cola completa de canciones y reproducir desde índice dado.
     try {
       await audioService.setQueueFromSongs(songs);
@@ -280,6 +304,7 @@ class HomeController extends BaseController {
     bool mixed = false,
     String? mixedId,
     String? mixedTitle,
+    String? title,
   }) async {
     if (subset.isEmpty || startIndex < 0 || startIndex >= subset.length) return;
     try {
@@ -293,6 +318,7 @@ class HomeController extends BaseController {
     }
     currentMixedPlaylistId = mixed ? mixedId : null;
     currentMixedPlaylistTitle = mixed ? mixedTitle : null;
+    queueTitle = title ?? currentMixedPlaylistTitle;
     notifyListeners();
   }
 
@@ -309,4 +335,3 @@ class HomeController extends BaseController {
     super.dispose();
   }
 }
-
