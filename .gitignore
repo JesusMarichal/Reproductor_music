@@ -47,3 +47,6 @@ app.*.map.json
 # Local signing files (do NOT commit)
 /android/key.properties
 /android/app/release-keystore.jks
+
+# Claves que se pasan con --dart-define-from-file (no subir a git).
+dart_defines.json

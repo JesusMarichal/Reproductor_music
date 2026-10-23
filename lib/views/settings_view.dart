@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/about_dialog.dart';
+import '../widgets/youtube_key_dialog.dart';
 
 /// Opciones de la app en una lista plana con icono, al estilo de la pantalla
 /// "Cuenta" de YouTube Music.
@@ -33,6 +34,11 @@ class SettingsMenu extends StatelessWidget {
           icon: Icons.travel_explore_rounded,
           label: 'Descubrir música',
           onTap: () => Navigator.pushNamed(context, '/discovery'),
+        ),
+        _MenuItem(
+          icon: Icons.smart_display_outlined,
+          label: 'Conectar con YouTube',
+          onTap: () => showYouTubeKeyDialog(context),
         ),
         _MenuItem(
           icon: Icons.refresh_rounded,
