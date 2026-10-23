@@ -9,12 +9,9 @@ import '../theme/app_theme.dart';
 /// Se usa tanto en el botón central de la barra como en la cabecera de la
 /// pantalla de perfil, para que siempre muestren lo mismo.
 class ProfileAvatar extends StatelessWidget {
-  const ProfileAvatar({super.key, required this.size, this.borderColor});
+  const ProfileAvatar({super.key, required this.size});
 
   final double size;
-
-  /// Aro opcional alrededor del avatar.
-  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +25,6 @@ class ProfileAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: context.colors.primary,
-        border: borderColor == null
-            ? null
-            : Border.all(color: borderColor!, width: 2),
       ),
       clipBehavior: Clip.antiAlias,
       child: file != null
@@ -44,11 +38,7 @@ class ProfileAvatar extends StatelessWidget {
                 color: onPrimary,
               ),
             )
-          : _Initials(
-              text: profile.initials,
-              size: size,
-              color: onPrimary,
-            ),
+          : _Initials(text: profile.initials, size: size, color: onPrimary),
     );
   }
 }

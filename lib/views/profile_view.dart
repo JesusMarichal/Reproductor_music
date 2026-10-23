@@ -29,83 +29,62 @@ class ProfileView extends StatelessWidget {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Perfil'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune_rounded),
-            tooltip: 'Ajustes',
-            onPressed: () => _openSettings(context),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Perfil')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.sm,
-          AppSpacing.lg,
-          AppSpacing.xxl,
+        padding: const EdgeInsets.only(
+          top: AppSpacing.sm,
+          bottom: AppSpacing.xl,
         ),
         children: [
-          const _ProfileHeader(),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              _StatCard(
-                icon: Icons.library_music_rounded,
-                value: '${home.songs.length}',
-                label: home.songs.length == 1 ? 'Canción' : 'Canciones',
-              ),
-              const SizedBox(width: AppSpacing.md),
-              _StatCard(
-                icon: Icons.favorite_rounded,
-                value: '${favoriteSongs.length}',
-                label: favoriteSongs.length == 1 ? 'Favorito' : 'Favoritos',
-              ),
-              const SizedBox(width: AppSpacing.md),
-              _StatCard(
-                icon: Icons.queue_music_rounded,
-                value: '${playlists.length}',
-                label: playlists.length == 1 ? 'Lista' : 'Listas',
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          const _SectionTitle('Cuenta'),
-          Container(
-            decoration: BoxDecoration(
-              color: colors.surface1,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: colors.border),
-            ),
-            clipBehavior: Clip.antiAlias,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.tune_rounded),
-                  title: const Text('Ajustes'),
-                  subtitle: const Text('Tema, biblioteca y permisos'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _openSettings(context),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.info_outline_rounded),
-                  title: const Text('Acerca de Kiss Music'),
-                  subtitle: const Text('Versión $kAppVersion'),
-                  onTap: () => showAboutAppDialog(context),
+                const _ProfileHeader(),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  children: [
+                    _StatCard(
+                      icon: Icons.library_music_rounded,
+                      value: '${home.songs.length}',
+                      label: home.songs.length == 1 ? 'Canción' : 'Canciones',
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _StatCard(
+                      icon: Icons.favorite_rounded,
+                      value: '${favoriteSongs.length}',
+                      label: favoriteSongs.length == 1
+                          ? 'Favorito'
+                          : 'Favoritos',
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _StatCard(
+                      icon: Icons.queue_music_rounded,
+                      value: '${playlists.length}',
+                      label: playlists.length == 1 ? 'Lista' : 'Listas',
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.xl),
+          Divider(height: 1, thickness: 1, color: colors.border),
+          const SizedBox(height: AppSpacing.sm),
+          // Los ajustes van aquí mismo, sin otra pantalla que repita el
+          // avatar y el nombre.
+          const SettingsMenu(),
+          const SizedBox(height: AppSpacing.xl),
+          Center(
+            child: Text(
+              'Kiss Music  •  Versión $kAppVersion',
+              style: context.texts.bodyMedium?.copyWith(
+                color: colors.textTertiary,
+              ),
+            ),
+          ),
         ],
       ),
-    );
-  }
-
-  void _openSettings(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SettingsView()),
     );
   }
 }
@@ -184,8 +163,9 @@ class _ProfileHeader extends StatelessWidget {
                       const SizedBox(width: AppSpacing.xs),
                       Text(
                         profile.name.isEmpty ? 'Poner mi nombre' : 'Editar',
-                        style: context.texts.labelLarge
-                            ?.copyWith(color: colors.primary),
+                        style: context.texts.labelLarge?.copyWith(
+                          color: colors.primary,
+                        ),
                       ),
                     ],
                   ),
@@ -274,8 +254,7 @@ class _ProfileHeader extends StatelessWidget {
 
     try {
       final picked = await ImagePicker().pickImage(
-        source:
-            action == 'camera' ? ImageSource.camera : ImageSource.gallery,
+        source: action == 'camera' ? ImageSource.camera : ImageSource.gallery,
         maxWidth: 720,
         maxHeight: 720,
         imageQuality: 85,
@@ -346,32 +325,12 @@ class _StatCard extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: context.texts.bodySmall
-                  ?.copyWith(color: colors.textTertiary),
+              style: context.texts.bodySmall?.copyWith(
+                color: colors.textTertiary,
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: AppSpacing.xs,
-        bottom: AppSpacing.md,
-      ),
-      child: Text(
-        text.toUpperCase(),
-        style: context.texts.labelSmall
-            ?.copyWith(color: context.colors.textTertiary),
       ),
     );
   }

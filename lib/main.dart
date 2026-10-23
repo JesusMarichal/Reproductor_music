@@ -77,9 +77,7 @@ class KissMusicApp extends StatelessWidget {
         title: 'Kiss Music',
         debugShowCheckedModeBanner: false,
         theme: theme,
-        routes: {
-          '/discovery': (_) => const SpotifyDiscoveryView(),
-        },
+        routes: {'/discovery': (_) => const SpotifyDiscoveryView()},
         home: const SplashView(),
       ),
     );
@@ -168,10 +166,8 @@ class _ReproductorHomeState extends State<ReproductorHome> {
                 ),
             ],
             centerTooltip: 'Tu perfil',
-            centerChild: ProfileAvatar(
-              size: 60,
-              borderColor: Theme.of(context).colorScheme.onPrimary,
-            ),
+            // Mismo tamaño que el botón y sin aro: la foto llena el círculo.
+            centerChild: const ProfileAvatar(size: 60),
             onCenterPressed: _openProfile,
           ),
         ],
@@ -180,8 +176,8 @@ class _ReproductorHomeState extends State<ReproductorHome> {
   }
 
   void _openProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ProfileView()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ProfileView()));
   }
 }

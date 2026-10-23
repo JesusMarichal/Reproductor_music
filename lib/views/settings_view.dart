@@ -3,192 +3,61 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/home_controller.dart';
-import '../controllers/profile_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/about_dialog.dart';
-import '../widgets/profile_avatar.dart';
 
-/// Ajustes, al estilo de la pantalla "Cuenta" de YouTube Music: cabecera con
-/// el perfil y una lista plana de opciones con icono. Se abre desde el
-/// perfil, así que aporta su propia barra superior.
-class SettingsView extends StatelessWidget {
-  const SettingsView({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Cerrar',
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        titleSpacing: 0,
-        title: Text(
-          'Cuenta',
-          style: context.texts.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      body: const _SettingsBody(),
-    );
-  }
-}
-
-class _SettingsBody extends StatelessWidget {
-  const _SettingsBody();
+/// Opciones de la app en una lista plana con icono, al estilo de la pantalla
+/// "Cuenta" de YouTube Music.
+///
+/// Va incrustada en el perfil, debajo de la cabecera: antes era una pantalla
+/// aparte que repetía el avatar y el nombre, y parecía abrir otro perfil.
+class SettingsMenu extends StatelessWidget {
+  const SettingsMenu({super.key});
 
   @override
   Widget build(BuildContext context) {
     final home = context.read<HomeController>();
-    final colors = context.colors;
 
-    return CustomScrollView(
-      slivers: [
-        SliverList.list(
-          children: [
-            const _AccountHeader(),
-            Divider(height: 1, thickness: 1, color: colors.border),
-            const SizedBox(height: AppSpacing.sm),
-            _MenuItem(
-              icon: Icons.palette_outlined,
-              label: 'Apariencia',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const _AppearanceView(),
-                ),
-              ),
-            ),
-            _MenuItem(
-              icon: Icons.travel_explore_rounded,
-              label: 'Descubrir música',
-              onTap: () => Navigator.pushNamed(context, '/discovery'),
-            ),
-            _MenuItem(
-              icon: Icons.refresh_rounded,
-              label: 'Volver a leer la biblioteca',
-              onTap: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                await home.loadSongs();
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('${home.songs.length} canciones encontradas'),
-                  ),
-                );
-              },
-            ),
-            const _MenuItem(
-              icon: Icons.shield_outlined,
-              label: 'Permisos y notificaciones',
-              onTap: openAppSettings,
-            ),
-            _MenuItem(
-              icon: Icons.help_outline_rounded,
-              label: 'Acerca de Kiss Music',
-              onTap: () => showAboutAppDialog(context),
-            ),
-          ],
-        ),
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.xxl,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              child: Text(
-                'Kiss Music  •  Versión $kAppVersion',
-                style: context.texts.bodyMedium?.copyWith(
-                  color: colors.textTertiary,
-                ),
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MenuItem(
+          icon: Icons.palette_outlined,
+          label: 'Apariencia',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const _AppearanceView()),
           ),
+        ),
+        _MenuItem(
+          icon: Icons.travel_explore_rounded,
+          label: 'Descubrir música',
+          onTap: () => Navigator.pushNamed(context, '/discovery'),
+        ),
+        _MenuItem(
+          icon: Icons.refresh_rounded,
+          label: 'Volver a leer la biblioteca',
+          onTap: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            await home.loadSongs();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('${home.songs.length} canciones encontradas'),
+              ),
+            );
+          },
+        ),
+        const _MenuItem(
+          icon: Icons.shield_outlined,
+          label: 'Permisos y notificaciones',
+          onTap: openAppSettings,
+        ),
+        _MenuItem(
+          icon: Icons.help_outline_rounded,
+          label: 'Acerca de Kiss Music',
+          onTap: () => showAboutAppDialog(context),
         ),
       ],
-    );
-  }
-}
-
-/// Avatar, nombre y resumen de la biblioteca; vuelve al perfil al tocarla.
-class _AccountHeader extends StatelessWidget {
-  const _AccountHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final profile = context.watch<ProfileController>();
-    final home = context.watch<HomeController>();
-    final colors = context.colors;
-    // El azul de enlace de YouTube, con su variante para fondos claros.
-    final link = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF3EA6FF)
-        : const Color(0xFF065FD4);
-    void openProfile() => Navigator.of(context).maybePop();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: openProfile,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg + AppSpacing.xs,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  const ProfileAvatar(size: 48),
-                  const SizedBox(width: AppSpacing.lg + AppSpacing.xs),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.texts.titleMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text(
-                          '${home.songs.length} canciones · '
-                          '${home.favorites.length} me gusta',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.texts.bodyMedium?.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: colors.textPrimary),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 88),
-            child: GestureDetector(
-              onTap: openProfile,
-              child: Text(
-                'Administra tu perfil',
-                style: context.texts.bodyMedium?.copyWith(color: link),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

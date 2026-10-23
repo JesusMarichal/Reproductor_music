@@ -154,7 +154,7 @@ class _SearchViewState extends State<SearchView> {
                       : 'Sin resultados',
                   message: _query.isEmpty
                       ? 'Escribe el título de una canción, un artista o un '
-                          'álbum.'
+                            'álbum.'
                       : 'No hay ninguna canción que coincida con «$_query».',
                 )
               : ListView.builder(
@@ -164,11 +164,13 @@ class _SearchViewState extends State<SearchView> {
                     final song = results[i];
                     return _ResultTile(
                       song: song,
+                      isCurrent: home.currentSong?.id == song.id,
                       selected: _selected.contains(song.id),
                       onToggleSelection: () => _toggleSelection(song.id),
                       onPlay: () {
-                        final index =
-                            home.songs.indexWhere((s) => s.id == song.id);
+                        final index = home.songs.indexWhere(
+                          (s) => s.id == song.id,
+                        );
                         if (index != -1) home.playAt(index);
                       },
                       onAddToPlaylist: () => _addToPlaylist([song.id]),
@@ -253,6 +255,7 @@ class _SearchViewState extends State<SearchView> {
 class _ResultTile extends StatelessWidget {
   const _ResultTile({
     required this.song,
+    required this.isCurrent,
     required this.selected,
     required this.onToggleSelection,
     required this.onPlay,
@@ -260,6 +263,9 @@ class _ResultTile extends StatelessWidget {
   });
 
   final Song song;
+
+  /// La que está sonando: se resalta igual que en la biblioteca.
+  final bool isCurrent;
   final bool selected;
   final VoidCallback onToggleSelection;
   final VoidCallback onPlay;
@@ -275,7 +281,11 @@ class _ResultTile extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       child: Material(
-        color: selected ? colors.primary.withValues(alpha: 0.12) : null,
+        color: selected
+            ? colors.primary.withValues(alpha: 0.12)
+            : isCurrent
+            ? colors.primary.withValues(alpha: 0.10)
+            : null,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -288,7 +298,9 @@ class _ResultTile extends StatelessWidget {
             ),
             child: Row(
               children: [
-                SongArtwork(song: song, size: 48),
+                // Mismo tamaño que en la biblioteca: la carátula marca el alto
+                // de la fila y, si no, la lista encoge al cambiar de pestaña.
+                SongArtwork(song: song, size: 52),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -299,7 +311,11 @@ class _ResultTile extends StatelessWidget {
                         song.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: context.texts.titleSmall,
+                        style: context.texts.titleSmall?.copyWith(
+                          color: isCurrent
+                              ? colors.primary
+                              : colors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
@@ -314,8 +330,9 @@ class _ResultTile extends StatelessWidget {
                         ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: context.texts.bodySmall
-                            ?.copyWith(color: colors.textTertiary),
+                        style: context.texts.bodySmall?.copyWith(
+                          color: colors.textTertiary,
+                        ),
                       ),
                     ],
                   ),
